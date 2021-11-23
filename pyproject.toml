@@ -1,0 +1,99 @@
+[tool.poetry]
+name = "charmonium.freeze"
+version = "0.1.0"
+description = ""
+authors = ["Samuel Grayson <grayson5@illinois.edu>"]
+license = "MIT"
+readme = "README.rst"
+repository = "https://github.com/charmoniumQ/charmonium.freeze.git"
+packages = [
+    { include = "charmonium" },
+]
+classifiers = [
+			"Development Status :: 4 - Beta",
+			"Operating System :: OS Independent",
+			"Topic :: Software Development :: Libraries",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+# make sure to keep the Python versions here consistent with those tested by Tox (tool.tox.legacy_tox_ini.tox.envlist).
+
+[tool.poetry.dev-dependencies]
+mypy = "^0.910"
+pytest = "^6.2.5"
+pylint = "^2.11.1"
+typer = "^0.4.0"
+autoimport = "^0.7.5"
+isort = "^5.10.0"
+black = "^21.10b0"
+pytest-cov = "^3.0.0"
+tox = "^3.24.4"
+radon = "^5.1.0"
+coverage = {extras = ["toml"], version = "^6.1.2"}
+ipython = "^7.29.0"
+termcolor = "^1.1.0"
+twine = "^3.5.0"
+"charmonium.async-subprocess" = "^0.1.7"
+typing-extensions = "^3.10.0"
+toml = "^0.10.2"
+Sphinx = "^4.2.0"
+sphinx-autodoc-typehints = "^1.12.0"
+sphinxcontrib-spelling = "^7.2.1"
+proselint = "^0.13.0"
+pytest-xdist = {extras = ["psutil"], version = "^2.4.0"}
+pytest-sugar = "^0.9.4"
+bump2version = "^1.0.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+addopts = "--quiet --numprocesses=auto --doctest-modules --doctest-glob='*.rst'"
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    'pragma: no cover',
+    'def __repr__',
+    'if self\.debug',
+    'raise AssertionError',
+    'raise NotImplementedError',
+    'if False:',
+    'if __name__ == .__main__.:',
+	'if TYPE_CHECKING',
+    '@(abc\.)?abstractmethod',
+    '\w*\.\.\.$',
+    '\w*pass$',
+]
+
+# [tool.pylint]
+# Too long for inclusion here
+# see pylintrc
+
+# [tool.mypy]
+# Too long for inclusion here
+# see mypy.ini
+
+[tool.bump2version]
+commit = true
+tag = true
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py{37,38,39,310}
+# Make sure to install the Python versions listed here in the Nix flake.
+isolated_build = True
+
+[testenv]
+whitelist_externals = poetry
+skip_install = true
+commands =
+    poetry install
+    {toxinidir}/script.py per-env-tests
+"""
