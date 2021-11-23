@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "charmonium.freeze"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 authors = ["Samuel Grayson <grayson5@illinois.edu>"]
 license = "MIT"
