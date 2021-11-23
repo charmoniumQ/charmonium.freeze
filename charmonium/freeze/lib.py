@@ -5,77 +5,32 @@ import dis
 import functools
 import inspect
 import logging
-from pathlib import Path
-import types
 import textwrap
+import types
+from typing import Any, Callable, Set, Dict, Hashable, List, Optional, Set, Tuple, Type, cast
 
-logger = logging.getLogger("charmonium.cache.freeze")
+logger = logging.getLogger("charmonium.freeze")
+
 
 def freeze(obj: Any) -> Hashable:
-    """Injectively, deterministically maps objects to hashable, immutable objects.
-
-    ``frozenset`` is to ``set`` as ``freeze`` is to ``Any``.
-
-    That is, ``type(a) is type(b) and a != b`` implies ``freeze(a) != freeze(b)``.
-
-    And, ``a == b`` implies ``freeze(a) == freeze(b)``
-
-    Moreover, this function is deterministic, so it can be used to compare
-    states **across subsequent process invocations**.
-
-    Special cases:
-
-    - ``freeze`` on functions returns their bytecode, constants, and
-      closure-vars. This means that ``freeze_state(f) == freeze_state(g)``
-      implies ``f(x) == g(x)``. The remarkable thing is that this is true across
-      subsequent invocations of the same process. If the user edits the script
-      and changes the function, then it's ``freeze_state`` will change too.
-
-    - ``freeze`` on objects with a ``__getstate__`` method defers to
-      that. This intentionally reuses a method already used by
-      `Pickle`_. Sometimes, process-dependent data may be stored in the
-      attributes (imagine ``self.x = id(x)``), but this information would not be
-      stored in pickle's ``__getstate__``.
-
-    - In the cases where ``__getstate__`` is already defined, and this
-      definition is not suitable for ``freeze_state``, one may override this
-      with ``__getfrozenstate__`` which takes precedence.
-
-    - Otherwise, objects are frozen by their class and their non-property
-      owned-attributes. This excludes ``@property`` attributes, which are
-      computed based on other attributes, and it excludes methods, which come
-      from the class.
-
-    - The frozen-state of objects with an atribute ``.data`` of type
-      ``memoryview`` (e.g. Numpy arrays) are frozen by that state.
-
-    Although, this function is not infallible for user-defined types; I will do
-    my best, but sometimes these laws will be violated. These cases include:
-
-    - Cases where ``__eq__`` makes objects equal despite differing attributes or
-      inversely make objects inequal despite equal attributes.
-
-       - This can be mitigated if ``__getstate__`` or ``__getfrozenstate__``
-
-    """
-    logging.debug(f"freeze begin")
+    "Injectively, deterministically maps objects to hashable, immutable objects."
+    logger.debug("freeze begin")
     ret = freeze_helper(obj, set(), 0)
-    logging.debug(f"freeze end")
+    logger.debug("freeze end")
     return ret
 
 
-def freeze_helper(obj: Any, tabu: set[int], level: int) -> Hashable:
-    # pylint: disable=too-many-branches,too-many-return-statements
-
+def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
     if level > 50:
         raise ValueError("Maximum recursion")
 
+    if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
             " ".join(
                 [
                     level * " ",
                     type(obj).__name__,
-                    textwrap.shorten(repr(obj), width=100),
+                    textwrap.shorten(repr(obj), width=200),
                 ]
             )
         )
@@ -85,70 +40,63 @@ def freeze_helper(obj: Any, tabu: set[int], level: int) -> Hashable:
         return freeze_dispatch(obj, tabu, level)
 
 
-def is_function_or_bound_method(func: Any) -> bool:
-    return all([
-        isinstance(func, types.FunctionType),
-        any([
-            not isinstance(func, types.MethodType),
-            hasattr(func, "__self__"),
-        ]),
-    ])
+def specializes_pickle(obj: Any) -> bool:
+    return any(
+        [
+            has_callable(obj, "__reduce_ex__"),
+            has_callable(obj, "__reduce__"),
+        ]
+    )
+
+
+def freeze_pickle(obj: Any, level: int) -> Any:
+    # I wish I didn't support 3.7, so I could use walrus operator
+    getnewargs_ex = has_callable(obj, "__getnewargs_ex__")
+    getnewargs = has_callable(obj, "__getnewargs__")
+    reduce_ex = cast(
+        Callable[[int], Tuple[Any, ...]], has_callable(obj, "__reduce_ex__")
+    )
+    reduce = cast(Callable[[int], Tuple[Any, ...]], has_callable(obj, "__reduce__"))
+
+    if reduce_ex:
+        reduced = reduce_ex(4)
+    elif reduce:
+        reduced = reduce()
+    else:
+        raise TypeError(f"{type(obj)} {obj} is not picklable")
+    logger.debug("%s (reduced=%s)", " " * (level + 1), reduced)
+
+    if getnewargs_ex:
+        new_args, new_kwargs = getnewargs_ex()
+    elif getnewargs:
+        new_args, new_kwargs = getnewargs(), {}
+    else:
+        new_args, new_kwargs = (), {}
+
+    init_args = reduced[1]
+    state = reduced[2] if len(reduced) > 2 else getattr(obj, "__dict__", {})
+    list_items = list(reduced[3]) if len(reduced) > 3 and reduced[3] else []
+    dict_items = list(reduced[4]) if len(reduced) > 4 and reduced[4] else []
+    return (
+        str(type),
+        *((init_args,) if init_args else ()),
+        *((state,) if state else ()),
+        *((list_items,) if list_items else ()),
+        *((dict_items,) if dict_items else ()),
+        *((new_args,) if new_args else ()),
+        *((new_kwargs,) if new_kwargs else ()),
+    )
 
 @functools.singledispatch
-def freeze_dispatch(obj: Any, tabu: set[int], level: int) -> Hashable:
-    if hasattr(obj, "__getfrozenstate__") and is_function_or_bound_method(
-        getattr(obj, "__getfrozenstate__")
-    ):
-        return freeze_helper(
-            getattr(obj, "__getfrozenstate__")(),
-            tabu | {id(obj)},
-            level + 1,
-        )
-    if hasattr(obj, "__getstate__") and is_function_or_bound_method(
-        getattr(obj, "__getstate__")
-    ):
-        return freeze_helper(
-            getattr(obj, "__getstate__")(),
-            tabu | {id(obj)},
-            level + 1,
-        )
-    elif hasattr(obj, "data") and isinstance(getattr(obj, "data"), memoryview):
-        # Fast path for numpy arrays
-        return freeze_helper(
-            getattr(obj, "data"),
-            tabu | {id(obj), id(obj.data)},
-            level + 1,
-        )
+def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
+    getfrozenstate = has_callable(obj, "__getfrozenstate__")
+    tabu = tabu | {id(obj)}
+    if getfrozenstate:
+        return freeze_helper(getfrozenstate(), tabu, level + 1)
+    if specializes_pickle(obj):
+        return freeze_helper(freeze_pickle(obj, level), tabu, level + 1)
     else:
-        tabu = tabu | {id(obj)}
-        all_slots = [
-            slot
-            # Have to travel up the classes MRO to get slots defined by parent class.
-            for baseclass in obj.__class__.__mro__
-            if baseclass != object
-            for slot in getattr(baseclass, "__slots__", [])
-        ]
-        all_attributes = {
-            # some slots will be empty, so `getattr(obj, attrib)` will fail.
-            #
-            #     >>> import pathlib
-            #     >>> obj = pathlin.Path()
-            #     >>> pathlib.PurePath in obj.__class__.__mro__
-            #     >>> "_hash" in pathlib.PurePath.__slots__
-            #     True
-            #     >>> getattr(obj, "_hash")
-            #     AttributeError: _hash
-            #     >>> getattr(obj, "_hash", None)
-            #     >>>
-            #
-            attrib: getattr(obj, attrib, None)
-            for attrib in all_slots
-        } + getattr(obj, "__dict__", {})
-        return frozenset(
-            (attr, freeze_helper(val, tabu, level + 1))
-            for attr, val in all_attributes.items()
-            if attr not in {"__module__", "__dict__", "__weakref__", "__doc__"}
-        )
+        raise NotImplementedError("not implemented")
 
 
 @freeze_dispatch.register(type(None))
@@ -156,30 +104,30 @@ def freeze_dispatch(obj: Any, tabu: set[int], level: int) -> Hashable:
 @freeze_dispatch.register(str)
 @freeze_dispatch.register(int)
 @freeze_dispatch.register(float)
-def _(obj: Any, tabu: set[int], level: int) -> Hashable:
-    return object
+def _(obj: Hashable, tabu: Set[int], level: int) -> Hashable:
+    return obj
 
 
-@freeze_dispatch.register(types.BuiltinFunctionType)
-def _(obj: Any, tabu: set[int], level: int) -> Hashable:
+@freeze_dispatch.register
+def _(obj: types.BuiltinFunctionType, _tabu: Set[int], _level: int) -> Hashable:
     return obj.__name__
 
 
-@freeze_dispatch.register(bytearray)
-def _(obj: Any, tabu: set[int], level: int) -> Hashable:
+@freeze_dispatch.register
+def _(obj: bytearray, _tabu: Set[int], _level: int) -> Hashable:
     return bytes(obj)
 
 
 @freeze_dispatch.register(tuple)
 @freeze_dispatch.register(list)
-def _(obj: list[Any], tabu: set[int], level: int) -> Hashable:
+def _(obj: List[Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     return tuple(freeze_helper(elem, tabu, level + 1) for elem in cast(List[Any], obj))
 
 
 @freeze_dispatch.register(set)
 @freeze_dispatch.register(frozenset)
-def _(obj: set[Any], tabu: set[int], level: int) -> Hashable:
+def _(obj: Set[Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     return frozenset(
         freeze_helper(elem, tabu, level + 1) for elem in cast(Set[Any], obj)
@@ -188,7 +136,7 @@ def _(obj: set[Any], tabu: set[int], level: int) -> Hashable:
 
 @freeze_dispatch.register(dict)
 @freeze_dispatch.register(types.MappingProxyType)
-def _(obj: dict[Any, Any], tabu: set[int], level: int) -> Hashable:
+def _(obj: dict[Any, Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     # The elements of a dict remember their insertion order, as of Python 3.7.
     # So I will hash this as an ordered collection.
@@ -198,42 +146,17 @@ def _(obj: dict[Any, Any], tabu: set[int], level: int) -> Hashable:
     )
 
 
-@freeze_dispatch.register(Path)
-def _(obj: Path, tabu: set[int], level: int) -> Hashable:
-    # Special case needed because Path objects have a `_hash` attribute, containing a process-specific hash.
-    return obj.__fspath__()
-
-
-@freeze_dispatch.register(memoryview)
-def _(obj: memoryview, tabu: set[int], level: int) -> Hashable:
+@freeze_dispatch.register
+def _(obj: memoryview, tabu: Set[int], level: int) -> Hashable:
     return freeze_helper(
         obj.tobytes(),
-        tabu | {id(obj), id(obj.data)},
+        tabu | {id(obj)},
         level + 1,
     )
 
 
-# @freeze_dispatch.register(types.BuiltinMethodType)
-# @freeze_dispatch.register(types.MethodWrapperType)
-# @freeze_dispatch.register(types.WrapperDescriptorType)
-# @freeze_dispatch.register(types.MethodDescriptorType)
-# @freeze_dispatch.register(types.MemberDescriptorType)
-# @freeze_dispatch.register(types.ClassMemberDescriptorType)
-# @freeze_dispatch.register(types.GetSetDescriptorType)
-# @freeze_dispatch.register(types.MethodType)
-# def _(obj: Any, tabu: set[int], level: int) -> Hashable:
-#     return (
-#         obj.__qualname__,
-#         freeze_helper(
-#             getattr(obj, "__self__", None),
-#             tabu | {id(obj)},
-#             level + 1,
-#         )
-#     )
-
-
-@freeze_dispatch.register(types.FunctionType)
-def _(obj: Any, tabu: set[int], level: int) -> Hashable:
+@freeze_dispatch.register
+def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     closure = getclosurevars(obj)
     return (
@@ -243,8 +166,8 @@ def _(obj: Any, tabu: set[int], level: int) -> Hashable:
     )
 
 
-@freeze_dispatch.register(types.CodeType)
-def _(obj: Any, tabu: set[int], level: int) -> Hashable:
+@freeze_dispatch.register
+def _(obj: types.CodeType, tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     return (
         obj.co_name,  # name of function
@@ -254,20 +177,34 @@ def _(obj: Any, tabu: set[int], level: int) -> Hashable:
     )
 
 
-@freeze_dispatch.register(types.ModuleType)
-def _(obj: Any, tabu: set[int], level: int) -> Hashable:
+@freeze_dispatch.register
+def _(obj: types.ModuleType, _tabu: Set[int], _level: int) -> Hashable:
     return (obj.__name__, getattr(obj, "__version__", None))
 
 
-@freeze_dispatch.register(Path)
-def _(obj: Path, tabu: set[int], level: int) -> Hashable:
-    return obj.__fspath__()
-
-
 @freeze_dispatch.register(type)
-def _(obj: Type[Any], tabu: set[int], level: int) -> Hashable:
-    # return obj.__qualname__
-    raise NotImplementedError("`freeze` is Not implemented for types")
+def _(obj: Type[Any], tabu: Set[int], level: int) -> Hashable:
+    return obj.__qualname__
+    # raise NotImplementedError("`freeze` is Not implemented for types")
+
+
+def has_callable(
+    obj: object,
+    attr: str,
+    default: Optional[Callable[[], Any]] = None,
+) -> Optional[Callable[[], Any]]:
+    "Returns a callble if attr of obj is a function or bound method."
+    func = cast(Optional[Callable[[], Any]], getattr(obj, attr, default))
+    if all(
+        [
+            func,
+            callable(func),
+            (not isinstance(func, types.MethodType) or hasattr(func, "__self__")),
+        ]
+    ):
+        return func
+    else:
+        return None
 
 
 def getclosurevars(func: types.FunctionType) -> inspect.ClosureVars:

@@ -16,7 +16,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = ">=3.7,<3.11"
 # make sure to keep the Python versions here consistent with those tested by Tox (tool.tox.legacy_tox_ini.tox.envlist).
 
 [tool.poetry.dev-dependencies]
@@ -44,6 +44,8 @@ proselint = "^0.13.0"
 pytest-xdist = {extras = ["psutil"], version = "^2.4.0"}
 pytest-sugar = "^0.9.4"
 bump2version = "^1.0.1"
+"charmonium.determ-hash" = "^0.2.0"
+numpy = "^1.21.4"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -53,7 +55,13 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 
 [tool.pytest.ini_options]
-addopts = "--quiet --numprocesses=auto --doctest-modules --doctest-glob='*.rst'"
+addopts = "--numprocesses=auto --doctest-modules --doctest-glob='*.rst'"
+
+[tool.coverage.run]
+data_file = "build/coverage"
+
+[tool.coverage.html]
+directory = "build/htmlcov"
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
