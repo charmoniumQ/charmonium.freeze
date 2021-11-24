@@ -7,7 +7,7 @@ import inspect
 import logging
 import textwrap
 import types
-from typing import Any, Callable, Set, Dict, Hashable, List, Optional, Set, Tuple, Type, cast
+from typing import Any, Callable, Dict, Hashable, List, Optional, Set, Tuple, Type, cast
 
 logger = logging.getLogger("charmonium.freeze")
 
@@ -25,15 +25,16 @@ def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
         raise ValueError("Maximum recursion")
 
     if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            " ".join(
-                [
-                    level * " ",
-                    type(obj).__name__,
-                    textwrap.shorten(repr(obj), width=200),
-                ]
+        if not isinstance(obj, (str, bytes, int, float, complex, type(None))):
+            logger.debug(
+                " ".join(
+                    [
+                        level * " ",
+                        type(obj).__name__,
+                        textwrap.shorten(repr(obj), width=200),
+                    ]
+                )
             )
-        )
     if id(obj) in tabu:
         return b"cycle"
     else:
@@ -87,6 +88,7 @@ def freeze_pickle(obj: Any, level: int) -> Any:
         *((new_kwargs,) if new_kwargs else ()),
     )
 
+
 @functools.singledispatch
 def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
     getfrozenstate = has_callable(obj, "__getfrozenstate__")
@@ -104,6 +106,7 @@ def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
 @freeze_dispatch.register(str)
 @freeze_dispatch.register(int)
 @freeze_dispatch.register(float)
+@freeze_dispatch.register(complex)
 def _(obj: Hashable, tabu: Set[int], level: int) -> Hashable:
     return obj
 
@@ -180,6 +183,12 @@ def _(obj: types.CodeType, tabu: Set[int], level: int) -> Hashable:
 @freeze_dispatch.register
 def _(obj: types.ModuleType, _tabu: Set[int], _level: int) -> Hashable:
     return (obj.__name__, getattr(obj, "__version__", None))
+
+
+@freeze_dispatch.register
+def _(obj: logging.Logger, _tabu: Set[int], _level: int) -> Hashable:
+    # The client should be able to change the logger without changing the computation.
+    return obj.name
 
 
 @freeze_dispatch.register(type)

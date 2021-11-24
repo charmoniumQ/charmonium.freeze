@@ -12,6 +12,7 @@ from charmonium.determ_hash import determ_hash
 
 from charmonium.freeze import freeze
 
+
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
     lst = lst.copy()
     lst.insert(idx, lst)
@@ -34,7 +35,7 @@ class WithGetFrozenState:
     def __init__(self, value: int) -> None:
         self._value = value
 
-    def __getfrozenstate__(self) -> int: # pylint: disable=no-self-use
+    def __getfrozenstate__(self) -> int:  # pylint: disable=no-self-use
         return 0
 
 
