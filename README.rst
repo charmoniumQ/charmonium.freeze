@@ -16,12 +16,15 @@ charmonium.freeze
 - `PyPI`_
 - `GitHub`_
 
+Injectively, deterministically maps objects to hashable, immutable objects.
+
 ``frozenset`` is to ``set`` as ``freeze`` is to ``Any``.
 
 That is, ``type(a) is type(b) and a != b`` implies ``freeze(a) != freeze(b)``.
 
-Moreover, this function is deterministic, so it can be used to compare states
-**across subsequent process invocations**.
+Moreover, this function is deterministic, so it can be used to compare
+states **across subsequent process invocations** (with the same
+interpreter major and minor version).
 
 >>> obj = [1, 2, 3, {4, 5, 6}, object()]
 >>> hash(obj)
@@ -32,7 +35,7 @@ TypeError: unhashable type: 'list'
 >>> from charmonium.freeze import freeze
 >>> frozen_obj = freeze(obj)
 >>> frozen_obj
-(1, 2, 3, frozenset({4, 5, 6}), ("<class 'type'>", ('object',)))
+(1, 2, 3, frozenset({4, 5, 6}), ((('__newobj__', ('cls', 'args'), (None,), b'...'), (), ()), ('object',)))
 >>> hash(frozen_obj) % 1
 0
 

@@ -15,6 +15,7 @@
           pkgs.python38
           pkgs.python39
           pkgs.python310
+          pkgs.pypy3
         ];
       in {
         packages.${name} = pkgs.poetry2nix.mkPoetryApplication {

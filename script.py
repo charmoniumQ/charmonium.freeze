@@ -273,6 +273,7 @@ async def all_tests_inner() -> None:
     await asyncio.gather(
         poetry_build(),
         docs_inner(),
+        pytest(use_coverage=False, show_slow=False),
     )
     # Tox already has its own parallelism,
     # and it shows a nice stateus spinner.
@@ -286,6 +287,7 @@ async def all_tests_inner() -> None:
 
 async def pytest(use_coverage: bool, show_slow: bool) -> None:
     if tests_dir.exists():
+        await pretty_run(["python", "tests/test_freeze.py"])
         await pretty_run(
             [
                 "pytest",
@@ -298,7 +300,7 @@ async def pytest(use_coverage: bool, show_slow: bool) -> None:
         if use_coverage:
             await pretty_run(["coverage", "html"])
             print(
-                f"See code coverage in: file://{(build_dir / 'coverage' / 'index.html').resolve()}"
+                f"See code coverage in: file://{(build_dir / 'htmlcov' / 'index.html').resolve()}"
             )
 
 
