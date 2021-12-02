@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import contextlib
 import dis
 import functools
 import inspect
@@ -11,9 +12,41 @@ import sys
 import textwrap
 import types
 import weakref
-from typing import Any, Callable, Dict, Hashable, List, Optional, Set, Tuple, Type, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    Hashable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 
 logger = logging.getLogger("charmonium.freeze")
+
+# So you don't have to futz with the `sys.getrecursionlimit()`
+recursion_limit = 150
+
+
+def set_recursion_limit(val: int) -> None:
+    global recursion_limit
+    recursion_limit = val
+
+
+def get_recursion_limit() -> int:
+    return recursion_limit
+
+
+@contextlib.contextmanager
+def with_recursion_limit(val: int) -> Generator[None, None, None]:
+    old_val = get_recursion_limit()
+    set_recursion_limit(val)
+    yield
+    set_recursion_limit(old_val)
 
 
 def freeze(obj: Any) -> Hashable:
@@ -25,7 +58,7 @@ def freeze(obj: Any) -> Hashable:
 
 
 def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
-    if level > 50:
+    if level > recursion_limit:
         raise ValueError("Maximum recursion")
 
     if logger.isEnabledFor(logging.DEBUG):

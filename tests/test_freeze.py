@@ -12,10 +12,8 @@ from typing import Any, List, Mapping, cast
 import numpy
 import pytest
 from charmonium.determ_hash import determ_hash
+from charmonium.freeze import freeze, with_recursion_limit
 from tqdm import tqdm
-
-from charmonium.freeze import freeze
-
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
     lst = lst.copy()
@@ -252,6 +250,12 @@ def test_logs(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG, logger="charmonium.freeze"):
         freeze(frozenset({(1, "hello")}))
     assert caplog.text
+
+
+def test_recursion_limit() -> None:
+    with with_recursion_limit(2):
+        with pytest.raises(ValueError):
+            freeze([[[[[["hi"]]]]]])
 
 
 # TODO: Test for unique representation between types.

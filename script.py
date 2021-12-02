@@ -343,9 +343,9 @@ def publish(version_part: VersionPart, verify: bool = True, bump: bool = True) -
                 version_part.value,
                 "pyproject.toml",
                 *[
-                    str(Path(package) / "__init__.py")
+                    str(Path(package.replace(".", "/")) / "__init__.py")
                     for package in src_packages
-                    if (Path(package) / "__init__.py").exists()
+                    if (Path(package.replace(".", "/")) / "__init__.py").exists()
                 ],
             ],
             check=True,
