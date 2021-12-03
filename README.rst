@@ -35,9 +35,17 @@ TypeError: unhashable type: 'list'
 >>> from charmonium.freeze import freeze
 >>> frozen_obj = freeze(obj)
 >>> frozen_obj
-(1, 2, 3, frozenset({4, 5, 6}), ((('__newobj__', ('cls', 'args'), (None,), b'...'), (), ()), ('object',)))
->>> hash(frozen_obj) % 1
-0
+(1, 2, 3, frozenset({4, 5, 6}), ('object',))
+
+It even works on custom types.
+
+>>> # Make a custom type
+>>> class Struct:
+...     pass
+>>> s = Struct()
+>>> s.attr = 4
+>>> freeze(s)
+('Struct', (('attr', 4),))
 
 -------------
 Special cases

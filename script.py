@@ -287,7 +287,6 @@ async def all_tests_inner() -> None:
 
 async def pytest(use_coverage: bool, show_slow: bool) -> None:
     if tests_dir.exists():
-        await pretty_run(["python", "tests/test_freeze.py"])
         await pretty_run(
             [
                 "pytest",

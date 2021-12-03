@@ -1,19 +1,24 @@
+import base64
 import copy
+import functools
 import io
 import logging
 import pickle
-import platform
 import re
+import subprocess
 import sys
 import zlib
 from pathlib import Path
-from typing import Any, List, Mapping, cast
+from typing import Any, Iterable, List, Mapping, Set, cast
 
+import matplotlib.figure
 import numpy
 import pytest
 from charmonium.determ_hash import determ_hash
-from charmonium.freeze import freeze, with_recursion_limit
 from tqdm import tqdm
+
+from charmonium.freeze import freeze
+
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
     lst = lst.copy()
@@ -41,6 +46,11 @@ class WithGetFrozenState:
         return 0
 
 
+@functools.singledispatch
+def single_dispatch_test(x: Any):
+    return "Any"
+
+
 global0 = 0
 global1 = 1
 readme_rpb = open("README.rst", "r+b")  # pylint: disable=consider-using-with
@@ -57,7 +67,8 @@ non_equivalents: Mapping[str, Any] = {
     "dict of dicts": [dict(a=1, b=2, c=3), dict(a=1, b=2, c=4)],
     "dict with diff order": [{"a": 1, "b": 2}, {"b": 2, "a": 1}],
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
-    # "function": [cast, tqdm, freeze, determ_hash],
+    "singledispatch function": [single_dispatch_test],
+    # freeze, determ_hash],
     "function": [cast, tqdm],
     "lambda": [lambda: 1, lambda: 2, lambda: global0, lambda: global1],
     "builtin_function": [open, input],
@@ -67,8 +78,8 @@ non_equivalents: Mapping[str, Any] = {
     "type": [List[int], List[float]],
     "io.BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"def")],
     "io.StringIO": [io.StringIO("abc"), io.StringIO("def")],
-    "io.TextIOWrapper": [sys.stderr, sys.stdout],
-    "io.BufferedWriter": [sys.stderr.buffer, sys.stdout.buffer],
+    "io.TextIOWrapper": [open("/tmp/test1", "w"), open("/tmp/test2", "w"), sys.stdout],
+    "io.BufferedWriter": [open("/tmp/test3", "wb"), open("/tmp/test4", "wb"), sys.stdout.buffer],
     # `readme_rpb` already read 10 bytes, so it should be different than `open(...)`
     "io.BufferedRandom": [
         open("README.rst", "r+b"),  # pylint: disable=consider-using-with
@@ -79,6 +90,7 @@ non_equivalents: Mapping[str, Any] = {
         re.compile("def"),
         re.compile("def", flags=re.MULTILINE),
     ],
+    "matplotlib.figure.Figure": [matplotlib.figure.Figure()],
     # should have two distinct matches
     "re.Match": list(re.finditer("a", "abca")),
     "numpy numbers": [
@@ -88,11 +100,18 @@ non_equivalents: Mapping[str, Any] = {
         numpy.int64(456),
         numpy.float32(456),
     ],
-    "Paths": [Path(), Path("abc"), Path("def")],
-    "numpy array": [numpy.zeros(4), numpy.zeros(4, dtype=int), numpy.ones(4)],
+    "Path": [Path(), Path("abc"), Path("def")],
+    "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4, dtype=int), numpy.ones(4)],
     "obj with properties": [WithProperties(3), WithProperties(4)],
     "tqdm": [tqdm(range(10), disable=True)],
 }
+
+
+def mark_failing(params: Iterable[Any], failing: Set[Any]) -> Iterable[Any]:
+    return [
+        pytest.param(param, marks=[pytest.mark.xfail]) if param in failing else param
+        for param in params
+    ]
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
@@ -116,80 +135,49 @@ def test_freeze_total_uniqueness(input_kind: str) -> None:
                 ), f"freeze({this_value}) should be different than freeze({that_value})"
 
 
-@pytest.mark.parametrize("input_kind", non_equivalents.keys())
+non_copyable_types = {
+    "module",
+    "memoryview",
+    "io.TextIOWrapper",
+    "io.BufferedWriter",
+    "io.BufferedRandom",
+    "tqdm",
+}
+
+
+@pytest.mark.parametrize(
+    "input_kind", mark_failing(non_equivalents.keys(), {"matplotlib.figure.Figure"})
+)
 def test_determinism_over_copies(
     caplog: pytest.LogCaptureFixture, input_kind: str
 ) -> None:
     caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
-    if input_kind not in {
-        "module",
-        "memoryview",
-        "io.TextIOWrapper",
-        "io.BufferedWriter",
-        "io.BufferedRandom",
-        "tqdm",
-    }:
+    if input_kind not in non_copyable_types:
         for value in non_equivalents[input_kind]:
             value_copy = copy.deepcopy(value)
-            if getattr(value, "__name__", None) == "freeze":
-                pass
+            assert freeze(value) == freeze(value_copy)
 
-                # TODO: fix this test case
-                # This test case won't work for some reason.
-                # Here is my debugging:
-                # import inspect
-                # x = inspect.getclosurevars(inspect.getclosurevars(value).globals["freeze_helper"]).globals["freeze_dispatch"].registry
-                # y = inspect.getclosurevars(inspect.getclosurevars(value_copy).globals["freeze_helper"]).globals["freeze_dispatch"].registry
-
-                # This one passes
-                # assert x == y
-
-                # This one fails
-                # assert freeze(x) == freeze(y)
-                # The top-level object is a `WeakKeyDiectionary`, mapping types to underscore-functions set by `@freeze_dispatch.register`.
-                # Somehow it has different keys.
-
-            else:
-                assert freeze(value) == freeze(value_copy)
-
-
-datafile = (
-    Path()
-    / "tests"
-    / f"frozen-{platform.python_implementation()}-{sys.version_info.major}{sys.version_info.minor}.pkl"
-)
 
 # This is a fixture because it should only be evaluated once.
-@pytest.fixture(name="past_freezes")
+@pytest.fixture(name="past_freezes", scope="session")
 def fixture_past_freezes() -> Mapping[str, List[List[Any]]]:
-    if datafile.exists():
-        past_freezes = cast(
-            Mapping[str, List[List[Any]]], pickle.loads(datafile.read_bytes())
-        )
-        if len(past_freezes) == len(non_equivalents) and all(
-            len(past_values) == len(values)
-            for past_values, values in zip(
-                past_freezes.values(), non_equivalents.values()
-            )
-        ):
-            return past_freezes
-        else:
-            raise RuntimeError(
-                "freezes.pkl is out of date. Run this file without pytest first."
-            )
-    else:
-        raise RuntimeError(
-            "freezes.pkl doesn't exist. Run this file without pytest first."
-        )
+    proc = subprocess.run(
+        [sys.executable, __file__],
+        check=True,
+        capture_output=True,
+    )
+    return pickle.loads(base64.b64decode(proc.stdout))
 
 
-def write_freezes() -> None:
-    datafile.write_bytes(
-        pickle.dumps(
-            {
-                value_kind: [freeze(value) for value in values]
-                for value_kind, values in non_equivalents.items()
-            }
+if __name__ == "__main__":
+    sys.stdout.buffer.write(
+        base64.b64encode(
+            pickle.dumps(
+                {
+                    value_kind: [freeze(value) for value in values]
+                    for value_kind, values in non_equivalents.items()
+                }
+            )
         )
     )
 
@@ -213,26 +201,28 @@ readme_rpb2 = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb2.read(10)
 equivalents: Mapping[str, List[Any]] = {
     "list": [[1, 2, 3], [1, 2, 3]],
-    "ellipsis": [..., ...],
+    "Ellipsis": [..., ...],
     "recursive_list": [
         insert_recurrence([1, 2, 3, 4], 2),
         insert_recurrence([1, 2, 3, 4], 2),
     ],
     "lambda": [lambda: 1, lambda: 1],
     "obj with properties": [WithProperties(3), WithProperties(3)],
-    "numpy array": [numpy.zeros(4), numpy.zeros(4)],
-    "Paths": [
+    "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4)],
+    "Path": [
         Path(),
         p,
         # when p gets hashed, the hash gets cached in an extra field.
     ],
     "dict with same order": [{"a": 1, "b": 2}, {"a": 1, "b": 2}],
     "object with getfrozenstate": [WithGetFrozenState(3), WithGetFrozenState(4)],
-    "loggers": [logging.getLogger("a.b"), logging.getLogger("a.b")],
-    "BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"abc")],
-    "StringIO": [io.StringIO("abc"), io.StringIO("abc")],
+    "logging.Logger": [logging.getLogger("a.b"), logging.getLogger("a.b")],
+    "io.BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"abc")],
+    "io.StringIO": [io.StringIO("abc"), io.StringIO("abc")],
+    "io.TextIOWrapper": [open("/tmp/test5", "w"), open("/tmp/test5", "w")],
+    "io.BufferedWriter": [open("/tmp/test6", "wb"), open("/tmp/test6", "wb")],
     # readme_rpb and readme_rpb2 are seeked to the same point
-    "BufferedRandom": [readme_rpb, readme_rpb2],
+    "io.BufferedRandom": [readme_rpb, readme_rpb2],
 }
 
 
@@ -252,16 +242,13 @@ def test_logs(caplog: pytest.LogCaptureFixture) -> None:
     assert caplog.text
 
 
-def test_recursion_limit() -> None:
-    with with_recursion_limit(2):
-        with pytest.raises(ValueError):
-            freeze([[[[[["hi"]]]]]])
+# def test_recursion_limit() -> None:
+#     with with_recursion_limit(2):
+#         with pytest.raises(ValueError):
+#             freeze([[[[[["hi"]]]]]])
 
 
 # TODO: Test for unique representation between types.
 # TODO: Test functions with minor changes
 # TODO: Test set/dict with diff hash
 # TODO: Test obj with slots
-
-if __name__ == "__main__":
-    write_freezes()

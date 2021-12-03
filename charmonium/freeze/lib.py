@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import builtins
-import contextlib
+import copyreg
 import dis
 import functools
+import importlib
 import inspect
 import io
 import logging
@@ -16,9 +17,9 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Generator,
     Hashable,
     List,
+    Mapping,
     Optional,
     Set,
     Tuple,
@@ -28,25 +29,20 @@ from typing import (
 
 logger = logging.getLogger("charmonium.freeze")
 
-# So you don't have to futz with the `sys.getrecursionlimit()`
-recursion_limit = 150
+
+class Config:
+    recursion_limit = 150
+    constant_modules = {
+        "copyreg",
+    }
+    constant_modules_regex = [
+        re.compile("matplotlib[.].*"),
+        re.compile("theano[.].*"),
+        re.compile("numpy[.].*"),
+    ]
 
 
-def set_recursion_limit(val: int) -> None:
-    global recursion_limit
-    recursion_limit = val
-
-
-def get_recursion_limit() -> int:
-    return recursion_limit
-
-
-@contextlib.contextmanager
-def with_recursion_limit(val: int) -> Generator[None, None, None]:
-    old_val = get_recursion_limit()
-    set_recursion_limit(val)
-    yield
-    set_recursion_limit(old_val)
+config = Config()
 
 
 def freeze(obj: Any) -> Hashable:
@@ -58,7 +54,7 @@ def freeze(obj: Any) -> Hashable:
 
 
 def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
-    if level > recursion_limit:
+    if level > config.recursion_limit:
         raise ValueError("Maximum recursion")
 
     if logger.isEnabledFor(logging.DEBUG):
@@ -117,13 +113,17 @@ def freeze_pickle(obj: Any, _tabu: Set[int], level: int) -> Any:
         assert isinstance(reduced, tuple)
         assert 2 <= len(reduced) <= 5
         constructor = reduced[0]
-        init_args = reduced[1]
+        constructor_args = reduced[1]
         state = reduced[2] if len(reduced) > 2 else getattr(obj, "__dict__", {})
         list_items = list(reduced[3]) if len(reduced) > 3 and reduced[3] else []
         dict_items = list(reduced[4]) if len(reduced) > 4 and reduced[4] else []
         return (
-            constructor,
-            *((init_args,) if init_args else ()),
+            *(
+                (constructor,)
+                if constructor and constructor != getattr(copyreg, "__newobj__", None)
+                else ()
+            ),
+            *(constructor_args if constructor_args else ()),
             *((state,) if state else ()),
             *((list_items,) if list_items else ()),
             *((dict_items,) if dict_items else ()),
@@ -200,8 +200,30 @@ def _(obj: memoryview, tabu: Set[int], level: int) -> Hashable:
     )
 
 
+def freeze_module(module: str) -> Hashable:
+    parts = module.split(".")
+    parent_modules = [parts[0]]
+    for part in parts[1:]:
+        parent_modules.append(parent_modules[-1] + "." + part)
+    versions = list(
+        filter(
+            bool,
+            [
+                getattr(importlib.import_module(module), "__version__", None)
+                for module in parent_modules
+            ],
+        )
+    )
+    return (module, sys.version) + tuple(versions)
+
+
 @freeze_dispatch.register
 def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
+    if obj.__module__ in config.constant_modules:
+        return (freeze_module(obj.__module__), obj.__qualname__)
+    for module_regex in config.constant_modules_regex:
+        if module_regex.search(obj.__module__):
+            return (freeze_module(obj.__module__), obj.__qualname__)
     tabu = tabu | {id(obj)}
     closure = getclosurevars(obj)
     return (
@@ -346,6 +368,30 @@ else:
     def _(obj: tqdm.tqdm[Any], tabu: Set[int], level: int) -> Hashable:
         # Unfortunately, the tqdm object contains the timestamp of the last pring, which would result in a different state every time.
         return freeze_helper(obj.iterable, tabu, level)
+
+
+try:
+    import matplotlib.transforms  # noqa: autoimport
+except ImportError:
+    pass
+else:
+
+    @freeze_dispatch.register
+    def _(
+        obj: matplotlib.transforms.TransformNode, tabu: Set[int], level: int
+    ) -> Hashable:
+        # Unfortunately, the TransformNode uses the pointer-address of objects as keys in a dict.
+        # Also _invalid and _points seem to mutate for reasons I can't control (perhaps child invalidations)
+        ret = freeze_pickle(obj, tabu, level)
+        assert len(ret) == 2
+        constructor_args, state = cast(Tuple[Tuple[Any, ...], Mapping[str, Any]], ret)
+        new_state = {
+            key: val
+            for key, val in state.items()
+            if key not in {"_parents", "_invalid", "_points", "_mtx"}
+        }
+
+        return freeze_helper((constructor_args, new_state), tabu, level)
 
 
 def read_bytes(name: str) -> Optional[bytes]:
