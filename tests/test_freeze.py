@@ -47,7 +47,7 @@ class WithGetFrozenState:
 
 
 @functools.singledispatch
-def single_dispatch_test(x: Any):
+def single_dispatch_test(x: Any) -> Any:
     return "Any"
 
 
@@ -79,7 +79,11 @@ non_equivalents: Mapping[str, Any] = {
     "io.BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"def")],
     "io.StringIO": [io.StringIO("abc"), io.StringIO("def")],
     "io.TextIOWrapper": [open("/tmp/test1", "w"), open("/tmp/test2", "w"), sys.stdout],
-    "io.BufferedWriter": [open("/tmp/test3", "wb"), open("/tmp/test4", "wb"), sys.stdout.buffer],
+    "io.BufferedWriter": [
+        open("/tmp/test3", "wb"),
+        open("/tmp/test4", "wb"),
+        sys.stdout.buffer,
+    ],
     # `readme_rpb` already read 10 bytes, so it should be different than `open(...)`
     "io.BufferedRandom": [
         open("README.rst", "r+b"),  # pylint: disable=consider-using-with
@@ -145,9 +149,7 @@ non_copyable_types = {
 }
 
 
-@pytest.mark.parametrize(
-    "input_kind", mark_failing(non_equivalents.keys(), {"matplotlib.figure.Figure"})
-)
+@pytest.mark.parametrize("input_kind", non_equivalents.keys())
 def test_determinism_over_copies(
     caplog: pytest.LogCaptureFixture, input_kind: str
 ) -> None:
@@ -166,7 +168,10 @@ def fixture_past_freezes() -> Mapping[str, List[List[Any]]]:
         check=True,
         capture_output=True,
     )
-    return pickle.loads(base64.b64decode(proc.stdout))
+    return cast(
+        Mapping[str, List[List[Any]]],
+        pickle.loads(base64.b64decode(proc.stdout)),
+    )
 
 
 if __name__ == "__main__":

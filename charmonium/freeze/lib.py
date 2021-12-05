@@ -7,25 +7,14 @@ import functools
 import importlib
 import inspect
 import io
+import json
 import logging
 import re
 import sys
 import textwrap
 import types
 import weakref
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Hashable,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    cast,
-)
+from typing import Any, Callable, Dict, Hashable, List, Optional, Set, Tuple, Type, cast
 
 logger = logging.getLogger("charmonium.freeze")
 
@@ -371,27 +360,29 @@ else:
 
 
 try:
-    import matplotlib.transforms  # noqa: autoimport
+    import matplotlib.figure  # noqa: autoimport
 except ImportError:
     pass
 else:
 
-    @freeze_dispatch.register
-    def _(
-        obj: matplotlib.transforms.TransformNode, tabu: Set[int], level: int
-    ) -> Hashable:
-        # Unfortunately, the TransformNode uses the pointer-address of objects as keys in a dict.
-        # Also _invalid and _points seem to mutate for reasons I can't control (perhaps child invalidations)
-        ret = freeze_pickle(obj, tabu, level)
-        assert len(ret) == 2
-        constructor_args, state = cast(Tuple[Tuple[Any, ...], Mapping[str, Any]], ret)
-        new_state = {
-            key: val
-            for key, val in state.items()
-            if key not in {"_parents", "_invalid", "_points", "_mtx"}
-        }
+    try:
+        import mpld3  # noqa: autoimport
+    except ImportError as e:
+        raise RuntimeError(
+            "If you have matplotlib, you should have mpld3 as well."
+        ) from e
 
-        return freeze_helper((constructor_args, new_state), tabu, level)
+    @freeze_dispatch.register
+    def _(obj: matplotlib.figure.Figure, tabu: Set[int], level: int) -> Hashable:
+        file = io.StringIO()
+        mpld3.save_json(obj, file)
+        data = json.loads(file.getvalue())
+        data = {
+            key: value
+            for key, value in data.items()
+            if key != "id"
+        }
+        return freeze_helper(data, tabu, level)
 
 
 def read_bytes(name: str) -> Optional[bytes]:
