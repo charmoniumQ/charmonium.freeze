@@ -13,11 +13,13 @@ from typing import Any, Iterable, List, Mapping, Set, cast
 
 import matplotlib.figure
 import numpy
+import pandas  # type: ignore
+import pymc3
 import pytest
 from charmonium.determ_hash import determ_hash
 from tqdm import tqdm
 
-from charmonium.freeze import freeze
+from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config, freeze
 
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
@@ -47,14 +49,20 @@ class WithGetFrozenState:
 
 
 @functools.singledispatch
-def single_dispatch_test(x: Any) -> Any:
+def single_dispatch_test(_obj: Any) -> Any:
     return "Any"
+
+
+def function_test(obj: int) -> int:
+    return obj
 
 
 global0 = 0
 global1 = 1
 readme_rpb = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb.seek(10)
+
+# pylint: disable=consider-using-with
 non_equivalents: Mapping[str, Any] = {
     "ellipses": [...],
     "bytearray": [bytearray(b"hello"), bytearray(b"world")],
@@ -108,6 +116,18 @@ non_equivalents: Mapping[str, Any] = {
     "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4, dtype=int), numpy.ones(4)],
     "obj with properties": [WithProperties(3), WithProperties(4)],
     "tqdm": [tqdm(range(10), disable=True)],
+    "pandas.DataFrame": [
+        pandas.DataFrame(data={"col1": [1, 2], "col2": [3, 4]}),
+        pandas.DataFrame(data={"col1": [1, 3], "col2": [5, 4]}),  # change data
+        pandas.DataFrame(data={"abc1": [1, 2], "abc2": [3, 4]}),  # change column names
+        pandas.DataFrame(
+            data={"col1": [1, 2], "col2": [3, 4]}, index=[45, 65]
+        ),  # change index
+    ],
+    "functools.partial": [
+        functools.partial(function_test, 3),
+        functools.partial(function_test, 4),
+    ],
 }
 
 
@@ -204,6 +224,7 @@ p = Path()
 hash(p)
 readme_rpb2 = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb2.read(10)
+# pylint: disable=consider-using-with
 equivalents: Mapping[str, List[Any]] = {
     "list": [[1, 2, 3], [1, 2, 3]],
     "Ellipsis": [..., ...],
@@ -228,6 +249,14 @@ equivalents: Mapping[str, List[Any]] = {
     "io.BufferedWriter": [open("/tmp/test6", "wb"), open("/tmp/test6", "wb")],
     # readme_rpb and readme_rpb2 are seeked to the same point
     "io.BufferedRandom": [readme_rpb, readme_rpb2],
+    "pandas.DataFrame": [
+        pandas.DataFrame(data={"col1": [1, 2], "col2": [3, 4]}),
+        pandas.DataFrame(data={"col1": [1, 2], "col2": [3, 4]}),
+    ],
+    "functools.partial": [
+        functools.partial(function_test, 3),
+        functools.partial(function_test, 3),
+    ],
 }
 
 
@@ -236,6 +265,20 @@ def test_consistency_over_identicals() -> None:
         expected = freeze(values[0])
         for value in values:
             assert freeze(value) == expected
+
+
+# pylint: disable=consider-using-with
+bad_types: Mapping[str, Any] = {
+    "pymc3.Model": pymc3.Model(),
+    "io.BufferedReader": open("README.rst", "rb"),
+    "io.TextIOBase": open("README.rst", "r"),
+}
+
+
+@pytest.mark.parametrize("input_kind", bad_types.keys())
+def test_reject_bad_types(input_kind: str) -> None:
+    with pytest.raises(UnfreezableTypeError):
+        freeze(bad_types[input_kind])
 
 
 def test_logs(caplog: pytest.LogCaptureFixture) -> None:
@@ -247,10 +290,12 @@ def test_logs(caplog: pytest.LogCaptureFixture) -> None:
     assert caplog.text
 
 
-# def test_recursion_limit() -> None:
-#     with with_recursion_limit(2):
-#         with pytest.raises(ValueError):
-#             freeze([[[[[["hi"]]]]]])
+def test_recursion_limit() -> None:
+    old_recursion_limit = config.recursion_limit
+    config.recursion_limit = 2
+    with pytest.raises(FreezeRecursionError):
+        freeze([[[[[["hi"]]]]]])
+    config.recursion_limit = old_recursion_limit
 
 
 # TODO: Test for unique representation between types.
