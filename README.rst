@@ -41,11 +41,27 @@ It even works on custom types.
 
 >>> # Make a custom type
 >>> class Struct:
-...     pass
+...     def frobnicate(self):
+...         print(123)
 >>> s = Struct()
 >>> s.attr = 4
 >>> freeze(s)
 ('Struct', (('attr', 4),))
+
+And methods, functions, lambdas, etc.
+
+>>> freeze(lambda x: x + 123)
+(('<lambda>', ('x',), (None, 123), b'|\x00d\x01\x17\x00S\x00'), (), ())
+>>> import functools
+>>> freeze(functools.partial(print, 123))
+('partial', 'print', ('print', (123,), (), None))
+>>> freeze(Struct.frobnicate)
+(('frobnicate', ('self',), (None, 123), b't\x00d\x01\x83\x01\x01\x00d\x00S\x00'), (), ())
+
+If the source code of ``Struct.frobnicate`` changes between successive
+invocations, then the ``freeze`` value will change. This is useful for caching
+unchanged functions.
+
 
 -------------
 Special cases
