@@ -390,15 +390,14 @@ except ImportError:
     pass
 else:
 
-    try:
-        import mpld3  # noqa: autoimport
-    except ImportError as e:
-        raise RuntimeError(
-            "If you have matplotlib, you should have mpld3 as well."
-        ) from e
-
     @freeze_dispatch.register
     def _(obj: matplotlib.figure.Figure, tabu: Set[int], level: int) -> Hashable:
+        try:
+            import mpld3  # noqa: autoimport
+        except ImportError as e:
+            raise RuntimeError(
+                "Can't serialize matplotlib figures without mpld3."
+            ) from e
         file = io.StringIO()
         mpld3.save_json(obj, file)
         data = json.loads(file.getvalue())
