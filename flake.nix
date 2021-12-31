@@ -17,6 +17,22 @@
           pkgs.python310
           pkgs.pypy3
         ];
+        poetry2nix-crypto-override = pkgs.poetry2nix.overrides.withDefaults (self: super: {
+          cryptography = super.cryptography.overridePythonAttrs(old: {
+            cargoDeps = pkgs.rustPlatform.fetchCargoTarball {
+              inherit (old) src;
+              name = "${old.pname}-${old.version}";
+              sourceRoot = "${old.pname}-${old.version}/src/rust/";
+              sha256 = "sha256-Y6TuW7AryVgSvZ6G8WNoDIvi+0tvx8ZlEYF5qB0jfNk=";
+            };
+            cargoRoot = "src/rust";
+            nativeBuildInputs = old.nativeBuildInputs ++ (with pkgs.rustPlatform; [
+              rust.rustc
+              rust.cargo
+              cargoSetupHook
+            ]);
+          });
+        });
       in {
         packages.${name} = pkgs.poetry2nix.mkPoetryApplication {
           projectDir = ./.;
@@ -29,6 +45,7 @@
             #   projectDir = ./.;
             #   # default Python for shell
             #   python = default-python;
+            #   overrides = poetry2nix-crypto-override;
             # })
           ];
           # TODO: write a check expression (`nix flake check`)
