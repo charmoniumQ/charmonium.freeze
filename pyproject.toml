@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "charmonium.freeze"
-version = "0.5.0"
+version = "0.5.1"
 description = ""
 authors = ["Samuel Grayson <grayson5@illinois.edu>"]
 license = "MIT"
