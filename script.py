@@ -257,15 +257,16 @@ async def docs_inner() -> None:
 
 @app.command()
 @coroutine_to_function
-async def all_tests() -> None:
-    await all_tests_inner()
+async def all_tests(interactive: bool = True) -> None:
+    await all_tests_inner(interactive)
 
 
-async def all_tests_inner() -> None:
+async def all_tests_inner(interactive: bool) -> None:
     async def poetry_build() -> None:
         dist = Path("dist")
         if dist.exists():
             shutil.rmtree(dist)
+        await pretty_run(["rstcheck", "README.rst"])
         await pretty_run(["poetry", "build", "--quiet"])
         await pretty_run(["twine", "check", "--strict", *dist.iterdir()])
         shutil.rmtree(dist)
@@ -280,7 +281,11 @@ async def all_tests_inner() -> None:
     # so I'll not `await pretty_run`
     subprocess.run(
         ["tox", "--parallel", "auto"],
-        env={**os.environ, "PY_COLORS": "1"},
+        env={
+            **os.environ,
+            "PY_COLORS": "1",
+            "TOX_PARALLEL_NO_SPINNER": "" if interactive else "1"
+        },
         check=True,
     )
 
@@ -331,7 +336,7 @@ def dct_to_args(dct: Mapping[str, Union[bool, int, float, str]]) -> List[str]:
 
 @app.command()
 def publish(version_part: VersionPart, verify: bool = True, bump: bool = True) -> None:
-    asyncio.run(all_tests_inner() if verify else docs_inner())
+    asyncio.run(all_tests_inner(True) if verify else docs_inner())
     if bump:
         subprocess.run(
             [
