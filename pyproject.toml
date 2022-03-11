@@ -92,7 +92,8 @@ strict = true
 pretty = true
 error_summary = true
 color_output = true
-#mypy_path = stubs
+mypy_path = "stubs"
+disable_error_code = "no-redef"
 
 [tool.bump2version]
 commit = true

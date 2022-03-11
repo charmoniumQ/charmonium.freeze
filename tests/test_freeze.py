@@ -3,6 +3,7 @@ import copy
 import functools
 import io
 import logging
+import os
 import pickle
 import re
 import subprocess
@@ -182,10 +183,15 @@ def test_determinism_over_copies(
 # This is a fixture because it should only be evaluated once.
 @pytest.fixture(name="past_freezes", scope="session")
 def fixture_past_freezes() -> Mapping[str, List[List[Any]]]:
+    path_to_package = Path(freeze.__code__.co_filename).resolve().parent.parent.parent
     proc = subprocess.run(
         [sys.executable, __file__],
         check=True,
         capture_output=True,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(path_to_package) + ":" + os.environ.get("PYTHONPATH", ""),
+        }
     )
     return cast(
         Mapping[str, List[List[Any]]],
