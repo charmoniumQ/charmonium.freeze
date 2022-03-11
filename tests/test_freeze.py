@@ -14,7 +14,6 @@ from typing import Any, Iterable, List, Mapping, Set, cast
 import matplotlib.figure
 import numpy
 import pandas  # type: ignore
-import pymc3
 import pytest
 from charmonium.determ_hash import determ_hash
 from tqdm import tqdm
@@ -269,7 +268,6 @@ def test_consistency_over_identicals() -> None:
 
 # pylint: disable=consider-using-with
 bad_types: Mapping[str, Any] = {
-    "pymc3.Model": pymc3.Model(),
     "io.BufferedReader": open("README.rst", "rb"),
     "io.TextIOBase": open("README.rst", "r"),
 }
