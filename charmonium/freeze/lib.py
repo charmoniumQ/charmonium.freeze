@@ -64,7 +64,7 @@ def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
                     [
                         level * " ",
                         type(obj).__name__,
-                        textwrap.shorten(repr(obj), width=150),
+                        textwrap.shorten(repr(obj), width=250),
                     ]
                 )
             )

@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.7.1,<3.11"
+python = "^3.8"
 # make sure to keep the Python versions here consistent with those tested by Tox (tool.tox.legacy_tox_ini.tox.envlist).
 
 [tool.poetry.dev-dependencies]
@@ -46,7 +46,7 @@ sphinxcontrib-spelling = "^7.2.1"
 proselint = "^0.13.0"
 bump2version = "^1.0.1"
 "charmonium.determ-hash" = "^0.2.0"
-numpy = "^1.21.4"
+numpy = "^1.22"
 tqdm = "^4.62.3"
 pytest-xdist = "^2.4.0"
 typer = "^0.4.0"
