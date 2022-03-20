@@ -4,7 +4,7 @@ from .lib import UnfreezableTypeError as UnfreezableTypeError
 from .lib import config as config
 from .lib import freeze as freeze
 
-__version__ = "0.3.0"
+__version__ = "0.5.2"
 
 __all__ = [
     "__version__",

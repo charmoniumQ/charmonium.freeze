@@ -1,22 +1,39 @@
-=================
+==========================
 charmonium.freeze
-=================
+==========================
 
-.. image: https://img.shields.io/pypi/dm/charmonium.freeze
+.. image:: https://img.shields.io/pypi/v/charmonium.freeze
+   :alt: PyPI Package
+   :target: https://pypi.org/project/charmonium.freeze
+.. image:: https://img.shields.io/pypi/dm/charmonium.freeze
    :alt: PyPI Downloads
-.. image: https://img.shields.io/pypi/l/charmonium.freeze
-   :alt: PyPI Downloads
-.. image: https://img.shields.io/pypi/pyversions/charmonium.freeze
-   :alt: Python versions
-.. image: https://img.shields.io/github/stars/charmoniumQ/charmonium.freeze?style=social
-   :alt: GitHub stars
-.. image: https://img.shields.io/librariesio/sourcerank/pypi/charmonium.freeze
+   :target: https://pypi.org/project/charmonium.freeze
+.. image:: https://img.shields.io/pypi/l/charmonium.freeze
+   :alt: License
+   :target: https://github.com/charmonium/charmonium.freeze/blob/main/LICENSE
+.. image:: https://img.shields.io/pypi/pyversions/charmonium.freeze
+   :alt: Python Versions
+   :target: https://pypi.org/project/charmonium.freeze
+.. image:: https://img.shields.io/librariesio/sourcerank/pypi/charmonium.freeze
    :alt: libraries.io sourcerank
+   :target: https://libraries.io/pypi/charmonium.freeze
+.. image:: https://img.shields.io/github/stars/charmonium/charmonium.freeze?style=social
+   :alt: GitHub stars
+   :target: https://github.com/charmonium/charmonium.freeze
+.. image:: https://github.com/charmonium/charmonium.freeze/actions/workflows/main.yaml/badge.svg
+   :alt: CI status
+   :target: https://github.com/charmonium/charmonium.freeze/actions/workflows/main.yaml
+.. image:: https://img.shields.io/github/last-commit/charmoniumQ/charmonium.determ_hash
+   :alt: GitHub last commit
+   :target: https://github.com/charmonium/charmonium.freeze/commits
+.. image:: http://www.mypy-lang.org/static/mypy_badge.svg
+   :target: https://mypy.readthedocs.io/en/stable/
+   :alt: Checked with Mypy
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+   :target: https://github.com/psf/black
+   :alt: Code style: black
 
-- `PyPI`_
-- `GitHub`_
-
-Injectively, deterministically maps objects to hashable, immutable objects.
+Injectively, deterministically maps objects to hashable, immutable objects
 
 ``frozenset`` is to ``set`` as ``freeze`` is to ``Any``.
 
@@ -89,6 +106,22 @@ best, but sometimes these laws will be violated. These cases include:
   inversely make objects inequal despite equal attributes.
 
    - This can be mitigated if ``__getstate__`` or ``__getfrozenstate__``
+
+------------
+Installing
+------------
+
+If you don't have ``pip`` installed, see the `pip install guide`_.
+
+.. _`pip install guide`: https://pip.pypa.io/en/latest/installing/
+
+.. code-block:: console
+
+    $ pip install charmonium.freeze
+
+See `CONTRIBUTING.md`_ for instructions on setting up a development environment.
+
+.. _`CONTRIBUTING.md`: https://github.com/charmonium/charmonium.freeze/tree/main/CONTRIBUTING.md
 
 ---------
 Debugging

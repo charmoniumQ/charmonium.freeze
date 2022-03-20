@@ -1,68 +1,37 @@
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
 [tool.poetry]
 name = "charmonium.freeze"
 version = "0.5.2"
-description = ""
-authors = ["Samuel Grayson <grayson5@illinois.edu>"]
+description = "Injectively, deterministically maps objects to hashable, immutable objects"
+authors = ["Samuel Grayson <sam+dev@samgrayson.me>"]
 license = "MIT"
 readme = "README.rst"
-repository = "https://github.com/charmoniumQ/charmonium.freeze.git"
+repository = "https://github.com/charmonium/charmonium.freeze"
+
 packages = [
-    { include = "charmonium" },
+	{ include = "charmonium" },
 ]
+
+keywords = ["freeze", "hash"]
 classifiers = [
-			"Development Status :: 4 - Beta",
-			"Operating System :: OS Independent",
-			"Topic :: Software Development :: Libraries",
+	"Operating System :: OS Independent",
+	"Typing :: Typed",
+	"Natural Language :: English",
+	"Development Status :: 4 - Beta","Intended Audience :: Developers","Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.8"
-# make sure to keep the Python versions here consistent with those tested by Tox (tool.tox.legacy_tox_ini.tox.envlist).
-
-[tool.poetry.dev-dependencies]
-mypy = "^0.910"
-pytest = "^6.2.5"
-pylint = "^2.11.1"
-autoimport = "^0.7.5"
-isort = "^5.10.0"
-black = "^21.10b0"
-pytest-cov = "^3.0.0"
-tox = "^3.24.4"
-radon = "^5.1.0"
-coverage = {extras = ["toml"], version = "^6.1.2"}
-ipython = "^7.29.0"
-termcolor = "^1.1.0"
-twine = "^3.5.0"
-"charmonium.async-subprocess" = "^0.1.7"
-typing-extensions = "^3.10.0"
-toml = "^0.10.2"
-Sphinx = "^4.2.0"
-sphinx-autodoc-typehints = "^1.12.0"
-sphinxcontrib-spelling = "^7.2.1"
-proselint = "^0.13.0"
-bump2version = "^1.0.1"
-"charmonium.determ-hash" = "^0.2.0"
-numpy = "^1.22"
-tqdm = "^4.62.3"
-pytest-xdist = "^2.4.0"
-typer = "^0.4.0"
-matplotlib = "^3.5.0"
-mpld3 = "^0.5.7"
-pandas = "^1.3.4"
-rstcheck = "^3.3.1"
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.isort]
 profile = "black"
 
 [tool.pytest.ini_options]
-addopts = "--numprocesses=0 --doctest-modules --doctest-glob='*.rst'"
+addopts = "--quiet --numprocesses=auto --doctest-modules --doctest-glob='*.rst'"
 
 [tool.coverage.run]
-data_file = "build/coverage"
+branch = true
+data_file = "build/.coverage"
 
 [tool.coverage.html]
 directory = "build/htmlcov"
@@ -96,13 +65,14 @@ mypy_path = "stubs"
 disable_error_code = "no-redef"
 
 [tool.bump2version]
+current_version = "0.5.2"
 commit = true
 tag = true
 
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py{38,39,310}
+envlist = py{37,38,39,310}
 # Make sure to install the Python versions listed here in the Nix flake.
 isolated_build = True
 
@@ -113,3 +83,35 @@ commands =
     poetry install
     {toxinidir}/script.py per-env-tests
 """
+
+[tool.poetry.dev-dependencies]
+autoimport = "^0.7.5"
+isort = "^5.10.0"
+black = "^21.10b0"
+pylint = "^2.11.1"
+mypy = "^0.910"
+pytest = "^6.2.5"
+pytest-xdist = "^2.4.0"
+pytest-cov = "^3.0.0"
+coverage = "^6.1.2"
+tox = "^3.24.4"
+radon = "^5.1.0"
+twine = "^3.5.0"
+proselint = "^0.13.0"
+rstcheck = "^3.3.1"
+bump2version = "^1.0.1"
+"charmonium.async-subprocess" = "^0.1.7"
+typer = "^0.4.0"
+termcolor = "^1.1.0"
+typing-extensions = "^4.1.1"
+ipython = "^7.29.0"
+ipdb = "^0.13.9"
+types-setuptools = "^57.4.10"
+types-toml = "^0.10.4"
+types-termcolor = "^1.1.3"
+# rest
+
+[tool.poetry.dependencies]
+python = "^3.7"
+# make sure to keep the Python versions here consistent with those tested by Tox (tool.tox.legacy_tox_ini.tox.envlist).
+

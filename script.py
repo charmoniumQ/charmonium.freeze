@@ -26,13 +26,13 @@ from typing import (
     cast,
 )
 
-import autoimport
+# import autoimport
 import isort
-import setuptools  # type: ignore
-import toml  # type: ignore
+import setuptools
+import toml
 import typer
 from charmonium.async_subprocess import run
-from termcolor import cprint  # type: ignore
+from termcolor import cprint
 from typing_extensions import ParamSpec
 
 Params = ParamSpec("Parms")
@@ -130,7 +130,8 @@ all_python_files = list(
 
 def autoimport_and_isort(path: Path) -> None:
     orig_code = path.read_text()
-    code = autoimport.fix_code(orig_code)
+    code = orig_code
+    # code = autoimport.fix_code(orig_code)
     code = isort.code(code)
     # if hash(code) != hash(orig_code):
     #     path.write_text(code)
@@ -262,20 +263,15 @@ async def all_tests(interactive: bool = True) -> None:
 
 
 async def all_tests_inner(interactive: bool) -> None:
-    async def poetry_build() -> None:
-        dist = Path("dist")
-        if dist.exists():
-            shutil.rmtree(dist)
-        await pretty_run(["rstcheck", "README.rst"])
-        await pretty_run(["poetry", "build", "--quiet"])
-        await pretty_run(["twine", "check", "--strict", *dist.iterdir()])
+    dist = Path("dist")
+    if dist.exists():
         shutil.rmtree(dist)
+    await pretty_run(["proselint", "README.rst"])
+    await pretty_run(["rstcheck", "README.rst"])
+    await pretty_run(["poetry", "build", "--quiet"])
+    await pretty_run(["twine", "check", "--strict", *dist.iterdir()])
+    shutil.rmtree(dist)
 
-    await asyncio.gather(
-        poetry_build(),
-        docs_inner(),
-        pytest(use_coverage=False, show_slow=False),
-    )
     # Tox already has its own parallelism,
     # and it shows a nice stateus spinner.
     # so I'll not `await pretty_run`
@@ -284,7 +280,7 @@ async def all_tests_inner(interactive: bool) -> None:
         env={
             **os.environ,
             "PY_COLORS": "1",
-            "TOX_PARALLEL_NO_SPINNER": "" if interactive else "1"
+            "TOX_PARALLEL_NO_SPINNER": "" if interactive else "1",
         },
         check=True,
     )
@@ -303,8 +299,9 @@ async def pytest(use_coverage: bool, show_slow: bool) -> None:
         )
         if use_coverage:
             await pretty_run(["coverage", "html"])
+            report_dir = Path(pyproject["tool"]["coverage"]["html"]["directory"])
             print(
-                f"See code coverage in: file://{(build_dir / 'htmlcov' / 'index.html').resolve()}"
+                f"See code coverage in: file://{(report_dir / 'index.html').resolve()}"
             )
 
 
@@ -335,8 +332,13 @@ def dct_to_args(dct: Mapping[str, Union[bool, int, float, str]]) -> List[str]:
 
 
 @app.command()
-def publish(version_part: VersionPart, verify: bool = True, bump: bool = True) -> None:
-    asyncio.run(all_tests_inner(True) if verify else docs_inner())
+def publish(
+        version_part: VersionPart,
+        gen_docs: bool = True,
+        bump: bool = True,
+) -> None:
+    if gen_docs:
+        asyncio.run(docs_inner())
     if bump:
         subprocess.run(
             [
@@ -354,12 +356,27 @@ def publish(version_part: VersionPart, verify: bool = True, bump: bool = True) -
             ],
             check=True,
         )
-    subprocess.run(
-        ["poetry", "publish", "--build"],
-        check=True,
-    )
+    extra_args = []
+    if "TWINE_USERNAME" in os.environ:
+        extra_args += ["--username", os.environ["TWINE_USERNAME"]]
+    if "TWINE_PASSWORD" in os.environ:
+        extra_args += ["--password", os.environ["TWINE_PASSWORD"]]
+    try:
+        subprocess.run(
+            ["poetry", "publish", "--build", *extra_args],
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        # Undo bump2version
+        pyproject = toml.loads(Path("pyproject.toml").read_text())
+        tag = "v" + pyproject["tool"]["bump2version"]["current_version"]
+        subprocess.run(["git", "tag", "--delete", tag])
+        subprocess.run(["git", "reset", "--hard", "HEAD~1"])
+        shutil.rmtree("dist")
+        raise e
     shutil.rmtree("dist")
     subprocess.run(["git", "push", "--tags"], check=True)
+    subprocess.run(["git", "push"], check=True)
     # TODO: publish docs
 
 
