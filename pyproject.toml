@@ -110,8 +110,13 @@ types-setuptools = "^57.4.10"
 types-toml = "^0.10.4"
 types-termcolor = "^1.1.3"
 # rest
+matplotlib = "^3.5.1"
+pandas = "^1.4.1"
+numpy = "^1.22.3"
+"charmonium.determ-hash" = "^0.2.2"
+mpld3 = "^0.5.7"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 # make sure to keep the Python versions here consistent with those tested by Tox (tool.tox.legacy_tox_ini.tox.envlist).
 

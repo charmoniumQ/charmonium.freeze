@@ -13,7 +13,7 @@ import types
 import weakref
 from typing import Any, Callable, Dict, Hashable, List, Set, Tuple, Type, cast
 
-from .util import getclosurevars, has_callable, specializes_pickle, sort_dict
+from .util import getclosurevars, has_callable, sort_dict, specializes_pickle
 
 logger = logging.getLogger("charmonium.freeze")
 
@@ -58,16 +58,15 @@ def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
         raise FreezeRecursionError(f"Maximum recursion depth {config.recursion_limit}")
 
     if logger.isEnabledFor(logging.DEBUG):
-        if not isinstance(obj, (str, bytes, int, float, complex, type(None))):
-            logger.debug(
-                " ".join(
-                    [
-                        level * " ",
-                        type(obj).__name__,
-                        textwrap.shorten(repr(obj), width=250),
-                    ]
-                )
+        logger.debug(
+            " ".join(
+                [
+                    level * " ",
+                    type(obj).__name__,
+                    textwrap.shorten(repr(obj), width=250),
+                ]
             )
+        )
     if id(obj) in tabu:
         return b"cycle"
     else:
@@ -120,16 +119,16 @@ def freeze_pickle(obj: Any, tabu: Set[int], level: int) -> Hashable:
         return freeze_helper(
             (
                 *(
-                    (constructor,)
-                    if constructor not in {getattr(copyreg, "__newobj__", None)}
+                    ("constructor", constructor)
+                    if constructor != getattr(copyreg, "__newobj__", None)  # pylint: disable=comparison-with-callable
                     else ()
                 ),
-                *(constructor_args if constructor_args else ()),
-                *((state,) if state else ()),
-                *((list_items,) if list_items else ()),
-                *((dict_items,) if dict_items else ()),
-                *((new_args,) if new_args else ()),
-                *((new_kwargs,) if new_kwargs else ()),
+                *(("args", *constructor_args) if constructor_args else ()),
+                *(("state", state) if state else ()),
+                *(("list", list_items) if list_items else ()),
+                *(("dict", dict_items) if dict_items else ()),
+                *(("new_args", new_args) if new_args else ()),
+                *(("new_kwargs", new_kwargs) if new_kwargs else ()),
             ),
             tabu,
             level + 1,
@@ -230,10 +229,28 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
             return (freeze_module(obj.__module__), obj.__qualname__)
     tabu = tabu | {id(obj)}
     closure = getclosurevars(obj)
-    return (
-        ("code", freeze_helper(obj.__code__, tabu, level + 1)),
-        ("closure.nonlocals", freeze_helper(sort_dict(closure.nonlocals), tabu, level + 1)),
-        ("closure.globals", freeze_helper(sort_dict(closure.globals), tabu, level + 1)),
+    return freeze_helper(
+        (
+            ("code", obj.__code__),
+            *(
+                (
+                    "closure nonlocals",
+                    sort_dict(closure.nonlocals),
+                )
+                if closure.nonlocals
+                else ()
+            ),
+            *(
+                (
+                    "closure globals",
+                    sort_dict(closure.globals),
+                )
+                if closure.globals
+                else ()
+            ),
+        ),
+        tabu,
+        level + 1,
     )
 
 
@@ -392,7 +409,7 @@ else:
 
     @freeze_dispatch.register
     def _(obj: matplotlib.figure.Figure, tabu: Set[int], level: int) -> Hashable:
-        try:
+        try: # pylint: disable=import-outside-toplevel
             import mpld3  # noqa: autoimport
         except ImportError as e:
             raise RuntimeError(

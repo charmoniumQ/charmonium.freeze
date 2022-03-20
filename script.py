@@ -333,9 +333,9 @@ def dct_to_args(dct: Mapping[str, Union[bool, int, float, str]]) -> List[str]:
 
 @app.command()
 def publish(
-        version_part: VersionPart,
-        gen_docs: bool = True,
-        bump: bool = True,
+    version_part: VersionPart,
+    gen_docs: bool = True,
+    bump: bool = True,
 ) -> None:
     if gen_docs:
         asyncio.run(docs_inner())
@@ -368,10 +368,10 @@ def publish(
         )
     except subprocess.CalledProcessError as e:
         # Undo bump2version
-        pyproject = toml.loads(Path("pyproject.toml").read_text())
-        tag = "v" + pyproject["tool"]["bump2version"]["current_version"]
-        subprocess.run(["git", "tag", "--delete", tag])
-        subprocess.run(["git", "reset", "--hard", "HEAD~1"])
+        new_pyproject = toml.loads(Path("pyproject.toml").read_text())
+        tag = "v" + new_pyproject["tool"]["bump2version"]["current_version"]
+        subprocess.run(["git", "tag", "--delete", tag], check=True)
+        subprocess.run(["git", "reset", "--hard", "HEAD~1"], check=True)
         shutil.rmtree("dist")
         raise e
     shutil.rmtree("dist")

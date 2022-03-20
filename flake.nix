@@ -15,7 +15,6 @@
         default-python = pkgs.python310;
         nix-dev-dependencies = [
           # Alternative Pythons for Tox
-          pkgs.python37
           pkgs.python38
           pkgs.python39
           pkgs.python310
@@ -62,6 +61,7 @@
             export PYTHONNOUSERSITE=true
             export VIRTUAL_ENV=$(poetry env info -p)
             export PATH=$VIRTUAL_ENV/bin:$PATH
+			export LD_LIBRARY_PATH=${pkgs.gcc-unwrapped.lib}/lib:$LD_LIBRARY_PATH
           '';
           # TODO: write a check expression (`nix flake check`)
         };
