@@ -13,7 +13,7 @@ import types
 import weakref
 from typing import Any, Callable, Dict, Hashable, List, Set, Tuple, Type, cast
 
-from .util import getclosurevars, has_callable, specializes_pickle
+from .util import getclosurevars, has_callable, specializes_pickle, sort_dict
 
 logger = logging.getLogger("charmonium.freeze")
 
@@ -231,9 +231,9 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     closure = getclosurevars(obj)
     return (
-        freeze_helper(obj.__code__, tabu, level + 1),
-        freeze_helper(closure.nonlocals, tabu, level + 1),
-        freeze_helper(closure.globals, tabu, level + 1),
+        ("code", freeze_helper(obj.__code__, tabu, level + 1)),
+        ("closure.nonlocals", freeze_helper(sort_dict(closure.nonlocals), tabu, level + 1)),
+        ("closure.globals", freeze_helper(sort_dict(closure.globals), tabu, level + 1)),
     )
 
 
@@ -246,10 +246,10 @@ def _(obj: types.BuiltinFunctionType, _tabu: Set[int], _level: int) -> Hashable:
 def _(obj: types.CodeType, tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     return (
-        obj.co_name,  # name of function
-        obj.co_varnames,  # argument names and local var names
-        freeze_helper(obj.co_consts, tabu, level + 1),  # constants used by code
-        freeze_helper(obj.co_code, tabu, level + 1),  # source code of function
+        ("name", obj.co_name),
+        ("varnames", obj.co_varnames),
+        ("constants", freeze_helper(obj.co_consts, tabu, level + 1)),
+        ("bytecode", freeze_helper(obj.co_code, tabu, level + 1)),
     )
 
 

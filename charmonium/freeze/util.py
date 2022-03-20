@@ -2,7 +2,7 @@ import builtins
 import dis
 import inspect
 import types
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Optional, TypeVar, cast
 
 
 def has_callable(
@@ -83,3 +83,9 @@ def specializes_pickle(obj: Any) -> bool:
             has_callable(obj, "__reduce__"),
         ]
     )
+
+
+T = TypeVar("T")
+V = TypeVar("V")
+def sort_dict(obj: Mapping[T, V]) -> Mapping[T, V]:
+    return dict(sorted(obj.items()))
