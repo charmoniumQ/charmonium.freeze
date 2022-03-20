@@ -107,6 +107,8 @@ best, but sometimes these laws will be violated. These cases include:
 
    - This can be mitigated if ``__getstate__`` or ``__getfrozenstate__``
 
+.. _`pickle`: https://docs.python.org/3/library/pickle.html#pickling-class-instances
+
 ------------
 Installing
 ------------
@@ -142,7 +144,3 @@ leaves
     fh.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(fh)
     logger.debug("Program %d", os.getpid())
-
-.. _`PyPI`: https://pypi.org/project/charmonium.freeze/
-.. _`GitHub`: https://github.com/charmoniumQ/charmonium.freeze
-.. _`pickle`: https://docs.python.org/3/library/pickle.html#pickling-class-instances
