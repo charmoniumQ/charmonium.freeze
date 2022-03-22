@@ -35,8 +35,8 @@ config = Config()
 
 def freeze(obj: Any) -> Hashable:
     "Injectively, deterministically maps objects to hashable, immutable objects."
-    logger.debug("freeze begin")
-    ret = freeze_helper(obj, set(), 0)
+    logger.debug("freeze begin %r", obj)
+    ret = freeze_helper(obj, set(), 1)
     logger.debug("freeze end")
     return ret
 
@@ -52,21 +52,21 @@ class UnfreezableTypeError(FreezeError):
 class FreezeRecursionError(FreezeError):
     pass
 
-
+simple_types = (type(None), bytes, str, int, float, complex, type(...), bytearray, memoryview)
 def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
     if level > config.recursion_limit:
         raise FreezeRecursionError(f"Maximum recursion depth {config.recursion_limit}")
 
     if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            " ".join(
-                [
-                    level * " ",
-                    type(obj).__name__,
-                    textwrap.shorten(repr(obj), width=250),
-                ]
+        if isinstance(obj, simple_types):
+            logger.debug("%s%s", level * " ", textwrap.shorten(repr(obj), width=250))
+        else:
+            logger.debug(
+                "%s%s %s",
+                level * " ",
+                type(obj).__name__,
+                textwrap.shorten(repr(obj), width=250),
             )
-        )
     if id(obj) in tabu:
         return b"cycle"
     else:
@@ -196,11 +196,7 @@ def _(obj: dict[Any, Any], tabu: Set[int], level: int) -> Hashable:
 
 @freeze_dispatch.register
 def _(obj: memoryview, tabu: Set[int], level: int) -> Hashable:
-    return freeze_helper(
-        obj.tobytes(),
-        tabu | {id(obj)},
-        level + 1,
-    )
+    return obj.tobytes()
 
 
 def freeze_module(module: str) -> Hashable:

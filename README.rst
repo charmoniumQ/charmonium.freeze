@@ -131,7 +131,7 @@ Debugging
 
 Use the following lines to see how ``freeze`` decomposes an object. It shows the
 object tree that ``freeze`` walks until it reaches primitive values on the
-leaves
+leaves.
 
 .. code:: python
 
