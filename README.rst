@@ -33,15 +33,41 @@ charmonium.freeze
    :target: https://github.com/psf/black
    :alt: Code style: black
 
-Injectively, deterministically maps objects to hashable, immutable objects
+Injectively, deterministically maps arbitrary objects to hashable values
 
-``frozenset`` is to ``set`` as ``freeze`` is to ``Any``.
+----------
+Quickstart
+----------
 
-That is, ``type(a) is type(b) and a != b`` implies ``freeze(a) != freeze(b)``.
+If you don't have ``pip`` installed, see the `pip install guide`_.
 
-Moreover, this function is deterministic, so it can be used to compare
-states **across subsequent process invocations** (with the same
-interpreter major and minor version).
+.. _`pip install guide`: https://pip.pypa.io/en/latest/installing/
+
+.. code-block:: console
+
+    $ pip install charmonium.freeze
+
+For a related project, |charmonium.cache|_, I needed a function that
+deterministically, injectively maps objects to hashable objects.
+
+- "Injectively" means ``freeze(a) == freeze(b)`` implies ``a == b``
+  (with the precondition that ``a`` and ``b`` are of the same type).
+
+- "Deterministically" means it should return the same value **across
+  subsequent process invocations** (with the same interpreter major
+  and minor version), unlike Python's |hash|_ function, which is not
+  deterministic between processes.
+
+- "Hashable" means one can call ``hash(...)`` on it. All hashable
+  values are immutable.
+
+.. |hash| replace:: ``hash``
+.. _`hash`: https://docs.python.org/3.8/reference/datamodel.html#object.__hash__
+.. |charmonium.cache| replace:: ``charmonium.cache``
+.. _`charmonium.cache`: https://github.com/charmoniumQ/charmonium.cache
+
+Have you ever felt like you wanted to "freeze" a list of arbitrary
+data into a hashable value? Now you can.
 
 >>> obj = [1, 2, 3, {4, 5, 6}, object()]
 >>> hash(obj)
@@ -50,9 +76,16 @@ Traceback (most recent call last):
 TypeError: unhashable type: 'list'
 
 >>> from charmonium.freeze import freeze
->>> frozen_obj = freeze(obj)
->>> frozen_obj
-(1, 2, 3, frozenset({4, 5, 6}), ('args', 'object'))
+>>> from pprint import pprint
+>>> freeze(obj)
+(1, 2, 3, frozenset({4, 5, 6}), (('args', ('object',)),))
+
+If you want to actually boil this down into a single integer, see
+|charmonium.determ_hash|_. This library's job is just to freeze the
+state.
+
+.. |charmonium.determ_hash| replace:: ``charmonium.determ_hash``
+.. _`charmonium.determ_hash`: https://github.com/charmoniumQ/charmonium.determ_hash
 
 It even works on custom types.
 
@@ -63,63 +96,123 @@ It even works on custom types.
 >>> s = Struct()
 >>> s.attr = 4
 >>> freeze(s)
-('args', 'Struct', 'state', (('attr', 4),))
+(('args', ('Struct',)), ('state', (('attr', 4),)))
 
 And methods, functions, lambdas, etc.
 
->>> freeze(lambda x: x + 123)
-(('code', (('name', '<lambda>'), ('varnames', ('x',)), ('constants', (None, 123)), ('bytecode', b'|\x00d\x01\x17\x00S\x00'))),)
+>>> pprint(freeze(lambda x: x + 123))
+(('code',
+  (('name', '<lambda>'),
+   ('varnames', ('x',)),
+   ('constants', (None, 123)),
+   ('bytecode', b'|\x00d\x01\x17\x00S\x00'))),)
 >>> import functools
->>> freeze(functools.partial(print, 123))
-('constructor', 'partial', 'args', 'print', 'state', ('print', (123,), (), None))
->>> freeze(Struct.frobnicate)
-(('code', (('name', 'frobnicate'), ('varnames', ('self',)), ('constants', (None, 123)), ('bytecode', b't\x00d\x01\x83\x01\x01\x00d\x00S\x00'))),)
+>>> pprint(freeze(functools.partial(print, 123)))
+(('constructor', 'partial'),
+ ('args', ('print',)),
+ ('state', ('print', (123,), (), None)))
+>>> pprint(freeze(Struct.frobnicate))
+(('code',
+  (('name', 'frobnicate'),
+   ('varnames', ('self',)),
+   ('constants', (None, 123)),
+   ('bytecode', b't\x00d\x01\x83\x01\x01\x00d\x00S\x00'))),)
+>>> i = 0
+>>> def square_plus_i(x):
+...     # Value of global variable will be included in the function's frozen state.
+...     return x**2 + i
+... 
+>>> pprint(freeze(square_plus_i))
+(('code',
+  (('name', 'square_plus_i'),
+   ('varnames', ('x',)),
+   ('constants', (None, 2)),
+   ('bytecode', b'|\x00d\x01\x13\x00t\x00\x17\x00S\x00'))),
+ ('closure globals', (('i', 0),)))
 
-If the source code of ``Struct.frobnicate`` changes between successive
-invocations, then the ``freeze`` value will change. This is useful for caching
-unchanged functions.
-
+If the source code of ``square_plus_i`` changes between successive invocations,
+then the ``freeze`` value will change. This is useful for caching unchanged
+functions.
 
 -------------
 Special cases
 -------------
 
 - ``freeze`` on functions returns their bytecode, constants, and
-  closure-vars. This means that ``freeze_state(f) == freeze_state(g)`` implies
-  ``f(x) == g(x)``. The remarkable thing is that this is true across subsequent
+  closure-vars. The remarkable thing is that this is true across subsequent
   invocations of the same process. If the user edits the script and changes the
-  function, then it's ``freeze_state`` will change too.
+  function, then it's ``freeze`` will change too.
 
-- ``freeze`` on objects returns the objects that would be used by `pickle`_ from
-  ``__reduce__``, ``__reduce_ex__``, ``__getnewargs__``, ``__getnewargs_ex__``,
-  and ``__getstate__``. The simplest of these to customize your object
-  ``__gestate__``. See the `pickle`_ documentation for details.
+  ::
 
-- In the cases where ``__getstate__`` is already defined for pickle, and this
-  definition is not suitable for ``freeze_state``, one may override this with
-  ``__getfrozenstate__`` which takes precedence.
+    (freeze(f) == freeze(g)) implies (for all x, f(x) == g(x))
 
-Although, this function is not infallible for user-defined types; I will do my
-best, but sometimes these laws will be violated. These cases include:
+- ``freeze`` on an object returns the data that used in the `pickle
+  protocol`_. This makes ``freeze`` work correctly on most user-defined
+  types. However, there can still be special cases: ``pickle`` may incorporate
+  non-deterministic values. In this case, there are two remedies:
 
-- Cases where ``__eq__`` makes objects equal despite differing attributes or
-  inversely make objects inequal despite equal attributes.
+  - If you can tweak the definition of the class, add a method called
+    ``__getfrozenstate__`` which returns a deterministic snapshot of the
+    state. This takes precedence over the Pickle protocol, if it is defined.
 
-   - This can be mitigated if ``__getstate__`` or ``__getfrozenstate__``
+    >>> class Struct:
+    ...     pass
+    >>> s = Struct()
+    >>> s.attr = 4
+    >>> pprint(freeze(s))
+    (('args', ('Struct',)), ('state', (('attr', 4),)))
+    >>> # which is based on the Pickle protocol's definition of `__reduce__`:
+    >>> pprint(s.__reduce__())
+    (<function _reconstructor at 0x...>,
+     (<class '__main__.Struct'>, <class 'object'>, None),
+     {'attr': 4})
 
-.. _`pickle`: https://docs.python.org/3/library/pickle.html#pickling-class-instances
 
-------------
-Installing
-------------
+  - If you cannot tweak the definition of the class, you can still register `single dispatch handler`_ 
+    for that type:
 
-If you don't have ``pip`` installed, see the `pip install guide`_.
+    >>> from typing import Set, Hashable
+    >>> from charmonium.freeze import freeze, _freeze_dispatch, _freeze
+    >>> class Test:
+    ...     deterministic_val = 3
+    ...     nondeterministic_val = 4
+    ... 
+    >>> @_freeze_dispatch.register(Test)
+    ... def _(obj: Test, tabu: Set[int], level: int) -> Hashable:
+    ...     # Type annotations are optional.
+    ...     # I have included them here for clarity.
+    ... 
+    ...     # `tabu` is for object cycle detection.
+    ...     tabu = tabu | {id(obj)}
+    ... 
+    ...     # `level` is for logging and infinite recursion detection.
+    ...     level = level + 1
+    ... 
+    ...     # Freeze should depend only on deterministic values.
+    ...     if isinstance(obj.deterministic_val, int):
+    ...         return obj.deterministic_val
+    ...     else:
+    ...         # If the underlying instance variable is not hashable, we can use recursion to help.
+    ...         # Call `_freeze` instead of `freeze` to recurse with `tabu` and `level`.
+    ...         return _freeze(obj.deterministic_val, tabu, level)
+    ... 
+    >>> freeze(Test())
+    3
 
-.. _`pip install guide`: https://pip.pypa.io/en/latest/installing/
+- Note that as of Python 3.7, dictionaries "remember" their insertion order. As such,
 
-.. code-block:: console
+  >>> freeze({"a": 1, "b": 2})
+  (('a', 1), ('b', 2))
+  >>> freeze({"b": 2, "a": 1})
+  (('b', 2), ('a', 1))
 
-    $ pip install charmonium.freeze
+.. _`pickle protocol`: https://docs.python.org/3/library/pickle.html#pickling-class-instances
+.. _`single dispatch handler`: https://docs.python.org/3/library/functools.html#functools.singledispatch
+
+----------
+Developing
+----------
 
 See `CONTRIBUTING.md`_ for instructions on setting up a development environment.
 
@@ -129,14 +222,12 @@ See `CONTRIBUTING.md`_ for instructions on setting up a development environment.
 Debugging
 ---------
 
-Use the following lines to see how ``freeze`` decomposes an object. It shows the
-object tree that ``freeze`` walks until it reaches primitive values on the
-leaves.
+Use the following lines to see how ``freeze`` decomposes an object into
+primitive values.
 
 .. code:: python
 
-    import logging
-    import os
+    import logging, os
     logger = logging.getLogger("charmonium.freeze")
     logger.setLevel(logging.DEBUG)
     fh = logging.FileHandler("freeze.log")
@@ -144,3 +235,92 @@ leaves.
     fh.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(fh)
     logger.debug("Program %d", os.getpid())
+
+    i = 0
+    def square_plus_i(x):
+        # Value of global variable will be included in the function's frozen state.
+        return x**2 + i
+
+    from charmonium.freeze import freeze
+    freeze(square_plus_i)
+
+
+This produces a log such as in ``freeze.log``:
+
+::
+
+    freeze begin <function square_plus_i at 0x7f9228bff550>
+     function <function square_plus_i at 0x7f9228bff550>
+      tuple (('code', <code object square_plus_i at 0x7f9228c6cf50, file "/tmp/ipython_edit_303agyiz/ipython_edit_rez33yf_.py", line 2>), 'closure globals', {'i': 0})
+       tuple ('code', <code object square_plus_i at 0x7f9228c6cf50, file "/tmp/ipython_edit_303agyiz/ipython_edit_rez33yf_.py", line 2>)
+        'code'
+        code <code object square_plus_i at 0x7f9228c6cf50, file "/tmp/ipython_edit_303agyiz/ipython_edit_rez33yf_.py", line 2>
+         tuple (None, 2)
+          None
+          2
+         b'|\x00d\x01\x13\x00t\x00\x17\x00S\x00'
+       'closure globals'
+       dict {'i': 0}
+        'i'
+        0
+    freeze end
+
+I do this to find the differences between subsequent runs:
+
+.. code:: shell
+
+    $ python code.py
+    $ mv freeze.log freeze.0.log
+
+    $ python code.py
+    $ mv freeze.log freeze.1.log
+
+    $ sed -i 's/at 0x[0-9a-f]*//g' freeze.*.log
+    # This removes pointer values that appear in the `repr(...)`.
+
+    $ meld freeze.0.log freeze.1.log
+    # Alternatively, use `icdiff` or `diff -u1`.
+
+TODO
+----
+
+- ☑ Bring hash into separate package.
+
+- ☐ Correctness
+
+  - ☑ Test hashing sets with different orders. Assert tests fail.
+  - ☑ Test hashing dicts with different orders. Assert tests fail.
+  - ☑ Don't include properties in hash.
+  - ☐ Support closures which include `import x` and `from x import y`
+  - ☐ Test for unique representation between types.
+  - ☐ Test functions with minor changes.
+  - ☐ Test set/dict with diff hash.
+  - ☐ Test obj with slots.
+  - ☐ Test hash for objects and classes more carefully.
+  - ☐ Improve test coverage.
+
+- ☑ API
+
+  - ☑ Use user-customizable multidispatch.
+  - ☑ Make it easier to register a freeze method for a type.
+  - ☑ Encapsulate global config `freeze` into object.
+
+- ☐ Make ``freeze`` handle more types:
+
+  - ☑ Module: freeze by name.
+  - ☑ Objects: include the source-code of methods.
+  - ☑ C extensions. freeze by name, like module
+  - ☑ Methods
+  - ☑ fastpath for numpy arrays
+  - ☑ ``tqdm``
+  - ☑ ``numpy.int64(1234)``
+  - ☐ Pandas dataframe
+  - ☑ Catch Pickle TypeError
+  - ☑ Catch Pickle ImportError
+
+- ☐ Performance
+
+  - ☐ Make performance benchmarks.
+  - ☐ Memoize the hash of immutable data.
+
+    - Note: this might not work, because immutable data can still contain pointers to mutable data, e.g.: in ``a = ([])``, ``a`` is immutable, but ``a[0]`` is not.
