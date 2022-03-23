@@ -5,7 +5,8 @@ description = "Injectively, deterministically maps arbitrary objects to hashable
 authors = ["Samuel Grayson <sam+dev@samgrayson.me>"]
 license = "MIT"
 readme = "README.rst"
-repository = "https://github.com/charmonium/charmonium.freeze"
+repository = "https://github.com/charmoniumQ/charmonium.freeze"
+
 
 packages = [
 	{ include = "charmonium" },
@@ -84,6 +85,7 @@ commands =
     poetry install
     {toxinidir}/script.py per-env-tests
 """
+
 
 [tool.poetry.dev-dependencies]
 autoimport = "^0.7.5"

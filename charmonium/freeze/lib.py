@@ -24,9 +24,9 @@ class Config:
         "copyreg",
     }
     constant_modules_regex = [
-        re.compile("matplotlib[.].*"),
-        re.compile("theano[.].*"),
-        re.compile("numpy[.].*"),
+        re.compile(r"matplotlib\..*"),
+        re.compile(r"theano\..*"),
+        re.compile(r"numpy\..*"),
     ]
 
 

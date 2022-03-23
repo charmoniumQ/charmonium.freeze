@@ -10,22 +10,22 @@ charmonium.freeze
    :target: https://pypi.org/project/charmonium.freeze
 .. image:: https://img.shields.io/pypi/l/charmonium.freeze
    :alt: License
-   :target: https://github.com/charmonium/charmonium.freeze/blob/main/LICENSE
+   :target: https://github.com/charmoniumQ/charmonium.freeze/blob/main/LICENSE
 .. image:: https://img.shields.io/pypi/pyversions/charmonium.freeze
    :alt: Python Versions
    :target: https://pypi.org/project/charmonium.freeze
 .. image:: https://img.shields.io/librariesio/sourcerank/pypi/charmonium.freeze
    :alt: libraries.io sourcerank
    :target: https://libraries.io/pypi/charmonium.freeze
-.. image:: https://img.shields.io/github/stars/charmonium/charmonium.freeze?style=social
+.. image:: https://img.shields.io/github/stars/charmoniumQ/charmonium.freeze?style=social
    :alt: GitHub stars
-   :target: https://github.com/charmonium/charmonium.freeze
-.. image:: https://github.com/charmonium/charmonium.freeze/actions/workflows/main.yaml/badge.svg
+   :target: https://github.com/charmoniumQ/charmonium.freeze
+.. image:: https://github.com/charmoniumQ/charmonium.freeze/actions/workflows/main.yaml/badge.svg
    :alt: CI status
-   :target: https://github.com/charmonium/charmonium.freeze/actions/workflows/main.yaml
+   :target: https://github.com/charmoniumQ/charmonium.freeze/actions/workflows/main.yaml
 .. image:: https://img.shields.io/github/last-commit/charmoniumQ/charmonium.determ_hash
    :alt: GitHub last commit
-   :target: https://github.com/charmonium/charmonium.freeze/commits
+   :target: https://github.com/charmoniumQ/charmonium.freeze/commits
 .. image:: http://www.mypy-lang.org/static/mypy_badge.svg
    :target: https://mypy.readthedocs.io/en/stable/
    :alt: Checked with Mypy
@@ -33,7 +33,8 @@ charmonium.freeze
    :target: https://github.com/psf/black
    :alt: Code style: black
 
-Injectively, deterministically maps arbitrary objects to hashable values
+Injectively, deterministically maps arbitrary objects to hashable, immutable values
+
 
 ----------
 Quickstart
@@ -216,7 +217,7 @@ Developing
 
 See `CONTRIBUTING.md`_ for instructions on setting up a development environment.
 
-.. _`CONTRIBUTING.md`: https://github.com/charmonium/charmonium.freeze/tree/main/CONTRIBUTING.md
+.. _`CONTRIBUTING.md`: https://github.com/charmoniumQ/charmonium.freeze/tree/main/CONTRIBUTING.md
 
 ---------
 Debugging
@@ -298,6 +299,7 @@ TODO
   - ☐ Test obj with slots.
   - ☐ Test hash for objects and classes more carefully.
   - ☑ Improve test coverage.
+  - ☐ Investigate when modules are assumed constant.
 
 - ☑ API
 
@@ -315,7 +317,7 @@ TODO
   - ☑ fastpath for numpy arrays
   - ☑ ``tqdm``
   - ☑ ``numpy.int64(1234)``
-  - ☐ Pandas dataframe
+  - ☑ Pandas dataframe
   - ☑ Catch Pickle TypeError
   - ☑ Catch Pickle ImportError
 

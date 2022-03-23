@@ -2,14 +2,15 @@
   "cookiecutter": {
     "repo_name": "charmonium.freeze",
     "package_name": "charmonium.freeze",
-    "description": "Injectively, deterministically maps objects to hashable, immutable objects",
+    "description": "Injectively, deterministically maps arbitrary objects to hashable, immutable values",
     "author_name": "Samuel Grayson",
     "author_email": "sam+dev@samgrayson.me",
     "license": "MIT",
     "__year": "2022",
-    "repo_user": "charmonium",
-    "repo_url": "https://github.com/charmonium/charmonium.freeze",
-    "version": "0.5.2",
+    "repo_user": "charmoniumQ",
+    "repo_url": "https://github.com/charmoniumQ/charmonium.freeze",
+    "docs_url": "none",
+    "version": "0.5.4",
     "use_poetry": "yes",
     "pypi_package": "yes",
     "keywords": "freeze hash",
@@ -18,5 +19,5 @@
     "trove_other_classifiers": "",
     "nix_dependencies": ""
   },
-  "comment": "This repository was created from a template in <https://github.com/charmoniumQ/sams-cookiecutter-pypackage.git> with these options. Use `cookiecutter gh:charmoniumQ/sams-cookiecutter-pypackage.git --output-dir . --overwrite-if-exists --reply --replay-file cookiecutter_replay.json` to regenerate."
+  "comment": "This repository was created from a template in <https://github.com/charmoniumQ/sams-cookiecutter-pypackage.git> with these options. Use `cookiecutter gh:charmoniumQ/sams-cookiecutter-pypackage.git --output-dir . --overwrite-if-exists --replay --replay-file cookiecutter_replay.json` to regenerate."
 }
