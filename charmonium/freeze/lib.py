@@ -393,13 +393,13 @@ else:
     try:
         import mpld3  # noqa: autoimport
     except ImportError:
-        mpld3 = None
+        has_mpld3 = False
     else:
-        pass
+        has_mpld3 = True
 
     @freeze_dispatch.register
     def _(obj: matplotlib.figure.Figure, tabu: Set[int], level: int) -> Hashable:
-        if mpld3 is None:
+        if not has_mpld3:
             raise RuntimeError(
                 "Can't serialize matplotlib figures without mpld3."
             )

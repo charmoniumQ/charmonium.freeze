@@ -304,6 +304,7 @@ TODO
   - ☑ Use user-customizable multidispatch.
   - ☑ Make it easier to register a freeze method for a type.
   - ☑ Encapsulate global config `freeze` into object.
+  - ☐ Move "get call graph" into its own package.
 
 - ☐ Make ``freeze`` handle more types:
 
