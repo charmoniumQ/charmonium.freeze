@@ -127,16 +127,14 @@ non_equivalents: Mapping[str, Any] = {
     "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4, dtype=int), numpy.ones(4)],
     "obj with properties": [WithProperties(3), WithProperties(4)],
     "tqdm": [tqdm(range(10), disable=True)],
-    # TODO: Make `test_determinism_over_processes` work for pandas.DataFrame.
-    # Last time I did this, some descendent object of Pandas would have some element called `_cache` non-dterministically.
-    # "pandas.DataFrame": [
-    #     pandas.DataFrame(data={"col1": [1, 2], "col2": [3, 4]}),
-    #     pandas.DataFrame(data={"col1": [1, 3], "col2": [5, 4]}),  # change data
-    #     pandas.DataFrame(data={"abc1": [1, 2], "abc2": [3, 4]}),  # change column names
-    #     pandas.DataFrame(
-    #         data={"col1": [1, 2], "col2": [3, 4]}, index=[45, 65]
-    #     ),  # change index
-    # ],
+    "pandas.DataFrame": [
+        pandas.DataFrame(data={"col1": [1, 2], "col2": [3, 4]}),
+        pandas.DataFrame(data={"col1": [1, 3], "col2": [5, 4]}),  # change data
+        pandas.DataFrame(data={"abc1": [1, 2], "abc2": [3, 4]}),  # change column names
+        pandas.DataFrame(
+            data={"col1": [1, 2], "col2": [3, 4]}, index=[45, 65]
+        ),  # change index
+    ],
     "functools.partial": [
         functools.partial(function_test, 3),
         functools.partial(function_test, 4),
@@ -314,9 +312,3 @@ def test_recursion_limit() -> None:
     with pytest.raises(FreezeRecursionError):
         freeze([[[[[["hi"]]]]]])
     config.recursion_limit = old_recursion_limit
-
-
-# TODO: Test for unique representation between types.
-# TODO: Test functions with minor changes
-# TODO: Test set/dict with diff hash
-# TODO: Test obj with slots

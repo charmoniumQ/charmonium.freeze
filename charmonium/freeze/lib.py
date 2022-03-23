@@ -36,7 +36,7 @@ config = Config()
 def freeze(obj: Any) -> Hashable:
     "Injectively, deterministically maps objects to hashable, immutable objects."
     logger.debug("freeze begin %r", obj)
-    ret = freeze_helper(obj, set(), 1)
+    ret = _freeze(obj, set(), 1)
     logger.debug("freeze end")
     return ret
 
@@ -53,7 +53,7 @@ class FreezeRecursionError(FreezeError):
     pass
 
 simple_types = (type(None), bytes, str, int, float, complex, type(...), bytearray, memoryview)
-def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
+def _freeze(obj: Any, tabu: Set[int], level: int) -> Hashable:
     if level > config.recursion_limit:
         raise FreezeRecursionError(f"Maximum recursion depth {config.recursion_limit}")
 
@@ -73,7 +73,7 @@ def freeze_helper(obj: Any, tabu: Set[int], level: int) -> Hashable:
         return freeze_dispatch(obj, tabu, level)
 
 
-def freeze_pickle(obj: Any, tabu: Set[int], level: int) -> Hashable:
+def freeze_pickle(obj: Any) -> Hashable:
     # I wish I didn't support 3.7, so I could use walrus operator
     getnewargs_ex = has_callable(obj, "__getnewargs_ex__")
     getnewargs = has_callable(obj, "__getnewargs__")
@@ -88,51 +88,35 @@ def freeze_pickle(obj: Any, tabu: Set[int], level: int) -> Hashable:
         reduced = reduce()
     else:
         raise TypeError(f"{type(obj)} {obj} is not picklable")
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            " ".join(
-                [
-                    level * " ",
-                    "reduce",
-                    textwrap.shorten(repr(obj), width=150),
-                ]
-            )
-        )
+
+    data: Dict[str, Any] = {}
 
     if getnewargs_ex:
-        new_args, new_kwargs = getnewargs_ex()
+        data["new_args"], data["new_kwargs"] = getnewargs_ex()
     elif getnewargs:
-        new_args, new_kwargs = getnewargs(), {}
-    else:
-        new_args, new_kwargs = (), {}
+        data["new_args"] = getnewargs()
 
     if isinstance(reduced, str):
-        return reduced
+        data["str"] = reduced
     else:
         assert isinstance(reduced, tuple)
         assert 2 <= len(reduced) <= 5
-        constructor = reduced[0]
-        constructor_args = reduced[1]
-        state = reduced[2] if len(reduced) > 2 else getattr(obj, "__dict__", {})
-        list_items = list(reduced[3]) if len(reduced) > 3 and reduced[3] else []
-        dict_items = list(reduced[4]) if len(reduced) > 4 and reduced[4] else []
-        return freeze_helper(
-            (
-                *(
-                    ("constructor", constructor)
-                    if constructor != getattr(copyreg, "__newobj__", None)  # pylint: disable=comparison-with-callable
-                    else ()
-                ),
-                *(("args", *constructor_args) if constructor_args else ()),
-                *(("state", state) if state else ()),
-                *(("list", list_items) if list_items else ()),
-                *(("dict", dict_items) if dict_items else ()),
-                *(("new_args", new_args) if new_args else ()),
-                *(("new_kwargs", new_kwargs) if new_kwargs else ()),
-            ),
-            tabu,
-            level + 1,
-        )
+        if reduced[0] != getattr(copyreg, "__newobj__", None):
+            data["constructor"] = reduced[0]
+        data["args"] = reduced[1]
+        data["state"] = reduced[2] if len(reduced) > 2 else getattr(obj, "__dict__", {})
+        if len(reduced) > 3 and reduced[3]:
+            data["list_items"] = list(list_items)
+        if len(reduced) > 4 and reduced[4]:
+            data["dict_items"] = list(reduced[4])
+
+    # Simplify by deleting "false-y" values.
+    data = {
+        key: value
+        for key, value in data.items()
+        if value
+    }
+    return data
 
 
 @functools.singledispatch
@@ -140,10 +124,15 @@ def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
     getfrozenstate = has_callable(obj, "__getfrozenstate__")
     tabu = tabu | {id(obj)}
     if getfrozenstate:
-        return freeze_helper(getfrozenstate(), tabu, level + 1)
+        # getfrozenstate is custom-built for charmonium.freeze
+        # It should take precedence.
+        return _freeze(getfrozenstate(), tabu, level + 1)
     if specializes_pickle(obj):
-        return freeze_pickle(obj, tabu, level)
+        # Otherwise, we may be able to use the Pickle protocol.
+        data = freeze_pickle(obj)
+        return _freeze(data, tabu | {id(obj)}, level + 1)
     else:
+        # Otherwise, give up.
         raise UnfreezableTypeError("not implemented")
 
 
@@ -155,6 +144,8 @@ def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
 @freeze_dispatch.register(complex)
 @freeze_dispatch.register(type(...))
 def _(obj: Hashable, tabu: Set[int], level: int) -> Hashable:
+    # Object is already hashable.
+    # No work to be done.
     return obj
 
 
@@ -167,7 +158,7 @@ def _(obj: bytearray, _tabu: Set[int], _level: int) -> Hashable:
 @freeze_dispatch.register(list)
 def _(obj: List[Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
-    return tuple(freeze_helper(elem, tabu, level + 1) for elem in cast(List[Any], obj))
+    return tuple(_freeze(elem, tabu, level + 1) for elem in cast(List[Any], obj))
 
 
 @freeze_dispatch.register(set)
@@ -175,8 +166,10 @@ def _(obj: List[Any], tabu: Set[int], level: int) -> Hashable:
 @freeze_dispatch.register(weakref.WeakSet)
 def _(obj: Set[Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
+    # "Python has never made guarantees about this ordering (and it typically varies between 32-bit and 64-bit builds)."
+    # -- https://docs.python.org/3.8/reference/datamodel.html#object.__hash__
     return frozenset(
-        freeze_helper(elem, tabu, level + 1) for elem in cast(Set[Any], obj)
+        _freeze(elem, tabu, level + 1) for elem in cast(Set[Any], obj)
     )
 
 
@@ -189,7 +182,7 @@ def _(obj: dict[Any, Any], tabu: Set[int], level: int) -> Hashable:
     # The elements of a dict remember their insertion order, as of Python 3.7.
     # So I will hash this as an ordered collection.
     return tuple(
-        (freeze_helper(key, tabu, level + 1), freeze_helper(val, tabu, level + 1))
+        (_freeze(key, tabu, level + 1), _freeze(val, tabu, level + 1))
         for key, val in list(cast(Dict[Any, Any], obj).items())
     )
 
@@ -223,31 +216,19 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
     for module_regex in config.constant_modules_regex:
         if module_regex.search(obj.__module__):
             return (freeze_module(obj.__module__), obj.__qualname__)
-    tabu = tabu | {id(obj)}
     closure = getclosurevars(obj)
-    return freeze_helper(
-        (
-            ("code", obj.__code__),
-            *(
-                (
-                    "closure nonlocals",
-                    sort_dict(closure.nonlocals),
-                )
-                if closure.nonlocals
-                else ()
-            ),
-            *(
-                (
-                    "closure globals",
-                    sort_dict(closure.globals),
-                )
-                if closure.globals
-                else ()
-            ),
-        ),
-        tabu,
-        level + 1,
-    )
+    data = {
+        "code": obj.__code__,
+        "closure nonlocals": sort_dict(closure.nonlocals),
+        "closure globals": sort_dict(closure.globals),
+    }
+    # Simplify data by removeing empty items.
+    data = {
+        key: val
+        for key, val in data.items()
+        if val
+    }
+    return _freeze(data, tabu | {id(obj)}, level + 1)
 
 
 @freeze_dispatch.register
@@ -261,8 +242,8 @@ def _(obj: types.CodeType, tabu: Set[int], level: int) -> Hashable:
     return (
         ("name", obj.co_name),
         ("varnames", obj.co_varnames),
-        ("constants", freeze_helper(obj.co_consts, tabu, level + 1)),
-        ("bytecode", freeze_helper(obj.co_code, tabu, level + 1)),
+        ("constants", _freeze(obj.co_consts, tabu, level + 1)),
+        ("bytecode", _freeze(obj.co_code, tabu, level + 1)),
     )
 
 
@@ -297,7 +278,7 @@ def _(obj: io.StringIO, _tabu: Set[int], _level: int) -> Hashable:
 @freeze_dispatch.register
 def _(obj: io.TextIOBase, tabu: Set[int], level: int) -> Hashable:
     if hasattr(obj, "buffer"):
-        return freeze_helper(obj.buffer, tabu, level)
+        return _freeze(obj.buffer, tabu, level)
     else:
         raise UnfreezableTypeError(
             f"Don't know how to serialize {type(obj)} {obj}. See source code for special cases."
@@ -382,7 +363,7 @@ def _(obj: re.Pattern[str], tabu: Set[int], level: int) -> Hashable:
 
 @freeze_dispatch.register(re.Match)
 def _(obj: re.Match[str], tabu: Set[int], level: int) -> Hashable:
-    return (obj.regs, freeze_helper(obj.re, tabu, level + 1), obj.string)
+    return (obj.regs, _freeze(obj.re, tabu, level + 1), obj.string)
 
 
 try:
@@ -394,7 +375,7 @@ else:
     @freeze_dispatch.register(tqdm.tqdm)
     def _(obj: tqdm.tqdm[Any], tabu: Set[int], level: int) -> Hashable:
         # Unfortunately, the tqdm object contains the timestamp of the last pring, which would result in a different state every time.
-        return freeze_helper(obj.iterable, tabu | {id(obj)}, level + 1)
+        return _freeze(obj.iterable, tabu | {id(obj)}, level + 1)
 
 
 try:
@@ -415,7 +396,7 @@ else:
         mpld3.save_json(obj, file)
         data = json.loads(file.getvalue())
         data = {key: value for key, value in data.items() if key != "id"}
-        return freeze_helper(data, tabu | {id(obj)}, level + 1)
+        return _freeze(data, tabu | {id(obj)}, level + 1)
 
 
 try:
@@ -429,3 +410,22 @@ else:
         raise UnfreezableTypeError(
             "pymc3.Model has been known to cause problems due to its not able to be pickled."
         )
+
+try:
+    from pandas.core.internals import Block # noqa: autoimport
+except ImportError:
+    pass
+else:
+
+    @freeze_dispatch.register
+    def _(obj: Block, tabu: Set[int], level: int) -> Hashable:
+        data = freeze_pickle(obj)
+        if "state" in data:
+            data["state"] = {
+                key: val
+                for key, val in data["state"].items()
+                if key != "_cache"
+            }
+            if not data["state"]:
+                del data["state"]
+        return _freeze(data, tabu | {id(obj)}, level + 1)
