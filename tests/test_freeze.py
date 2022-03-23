@@ -15,11 +15,13 @@ from typing import Any, Hashable, Iterable, List, Mapping, Set, cast
 
 import matplotlib.figure
 import numpy
-import pandas  # type: ignore
+import pandas
 import pytest
 from charmonium.determ_hash import determ_hash
-from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config, freeze
 from tqdm import tqdm
+
+from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config, freeze
+
 
 def print_inequality_in_hashables(x: Hashable, y: Hashable) -> None:
     if isinstance(x, tuple) and isinstance(y, tuple):

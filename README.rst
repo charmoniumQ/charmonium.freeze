@@ -297,7 +297,7 @@ TODO
   - ☐ Test set/dict with diff hash.
   - ☐ Test obj with slots.
   - ☐ Test hash for objects and classes more carefully.
-  - ☐ Improve test coverage.
+  - ☑ Improve test coverage.
 
 - ☑ API
 

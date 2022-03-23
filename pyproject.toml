@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "charmonium.freeze"
 version = "0.5.4"
-description = "Injectively, deterministically maps objects to hashable, immutable objects"
+description = "Injectively, deterministically maps arbitrary objects to hashable values"
 authors = ["Samuel Grayson <sam+dev@samgrayson.me>"]
 license = "MIT"
 readme = "README.rst"
@@ -72,6 +72,7 @@ tag = true
 [tool.tox]
 legacy_tox_ini = """
 [tox]
+# Unfortunately, matplotlib requires Pillow which doesn't work in pypy38.
 envlist = py{38,39,310}
 # Make sure to install the Python versions listed here in the Nix flake.
 isolated_build = True

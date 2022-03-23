@@ -52,7 +52,20 @@ class UnfreezableTypeError(FreezeError):
 class FreezeRecursionError(FreezeError):
     pass
 
-simple_types = (type(None), bytes, str, int, float, complex, type(...), bytearray, memoryview)
+
+simple_types = (
+    type(None),
+    bytes,
+    str,
+    int,
+    float,
+    complex,
+    type(...),
+    bytearray,
+    memoryview,
+)
+
+
 def _freeze(obj: Any, tabu: Set[int], level: int) -> Hashable:
     if level > config.recursion_limit:
         raise FreezeRecursionError(f"Maximum recursion depth {config.recursion_limit}")
@@ -73,7 +86,7 @@ def _freeze(obj: Any, tabu: Set[int], level: int) -> Hashable:
         return freeze_dispatch(obj, tabu, level)
 
 
-def freeze_pickle(obj: Any) -> Hashable:
+def freeze_pickle(obj: Any) -> Dict[str, Any]:
     # I wish I didn't support 3.7, so I could use walrus operator
     getnewargs_ex = has_callable(obj, "__getnewargs_ex__")
     getnewargs = has_callable(obj, "__getnewargs__")
@@ -101,21 +114,19 @@ def freeze_pickle(obj: Any) -> Hashable:
     else:
         assert isinstance(reduced, tuple)
         assert 2 <= len(reduced) <= 5
+        # pylint: disable=comparison-with-callable
         if reduced[0] != getattr(copyreg, "__newobj__", None):
             data["constructor"] = reduced[0]
         data["args"] = reduced[1]
         data["state"] = reduced[2] if len(reduced) > 2 else getattr(obj, "__dict__", {})
+        # reduced may only hae two items, or the third one may be None.
         if len(reduced) > 3 and reduced[3]:
-            data["list_items"] = list(list_items)
+            data["list_items"] = list(reduced[3])
         if len(reduced) > 4 and reduced[4]:
             data["dict_items"] = list(reduced[4])
 
     # Simplify by deleting "false-y" values.
-    data = {
-        key: value
-        for key, value in data.items()
-        if value
-    }
+    data = {key: value for key, value in data.items() if value}
     return data
 
 
@@ -168,9 +179,7 @@ def _(obj: Set[Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     # "Python has never made guarantees about this ordering (and it typically varies between 32-bit and 64-bit builds)."
     # -- https://docs.python.org/3.8/reference/datamodel.html#object.__hash__
-    return frozenset(
-        _freeze(elem, tabu, level + 1) for elem in cast(Set[Any], obj)
-    )
+    return frozenset(_freeze(elem, tabu, level + 1) for elem in cast(Set[Any], obj))
 
 
 @freeze_dispatch.register(dict)
@@ -187,6 +196,7 @@ def _(obj: dict[Any, Any], tabu: Set[int], level: int) -> Hashable:
     )
 
 
+# pylint: disable=unused-argument
 @freeze_dispatch.register
 def _(obj: memoryview, tabu: Set[int], level: int) -> Hashable:
     return obj.tobytes()
@@ -223,11 +233,7 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
         "closure globals": sort_dict(closure.globals),
     }
     # Simplify data by removeing empty items.
-    data = {
-        key: val
-        for key, val in data.items()
-        if val
-    }
+    data = {key: val for key, val in data.items() if val}
     return _freeze(data, tabu | {id(obj)}, level + 1)
 
 
@@ -384,14 +390,19 @@ except ImportError:
     pass
 else:
 
+    try:
+        import mpld3  # noqa: autoimport
+    except ImportError:
+        mpld3 = None
+    else:
+        pass
+
     @freeze_dispatch.register
     def _(obj: matplotlib.figure.Figure, tabu: Set[int], level: int) -> Hashable:
-        try: # pylint: disable=import-outside-toplevel
-            import mpld3  # noqa: autoimport
-        except ImportError as e:
+        if mpld3 is None:
             raise RuntimeError(
                 "Can't serialize matplotlib figures without mpld3."
-            ) from e
+            )
         file = io.StringIO()
         mpld3.save_json(obj, file)
         data = json.loads(file.getvalue())
@@ -411,8 +422,9 @@ else:
             "pymc3.Model has been known to cause problems due to its not able to be pickled."
         )
 
+
 try:
-    from pandas.core.internals import Block # noqa: autoimport
+    from pandas.core.internals import Block  # noqa: autoimport
 except ImportError:
     pass
 else:
@@ -422,9 +434,7 @@ else:
         data = freeze_pickle(obj)
         if "state" in data:
             data["state"] = {
-                key: val
-                for key, val in data["state"].items()
-                if key != "_cache"
+                key: val for key, val in data["state"].items() if key != "_cache"
             }
             if not data["state"]:
                 del data["state"]

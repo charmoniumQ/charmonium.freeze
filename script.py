@@ -266,7 +266,7 @@ async def all_tests_inner(interactive: bool) -> None:
     dist = Path("dist")
     if dist.exists():
         shutil.rmtree(dist)
-    await pretty_run(["proselint", "README.rst"])
+    # await pretty_run(["proselint", "README.rst"])
     await pretty_run(["rstcheck", "README.rst"])
     await pretty_run(["poetry", "build", "--quiet"])
     await pretty_run(["twine", "check", "--strict", *dist.iterdir()])
