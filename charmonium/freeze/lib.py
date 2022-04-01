@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import _thread
 import copyreg
 import functools
 import importlib
@@ -23,11 +24,15 @@ class Config:
     constant_modules = {
         "copyreg",
     }
-    constant_modules_regex = [
-        re.compile(r"matplotlib\..*"),
-        re.compile(r"theano\..*"),
-        re.compile(r"numpy\..*"),
+    constant_modules_regex: List[re.Pattern[str]] = [
+        # re.compile(r"matplotlib\..*"),
+        # re.compile(r"theano\..*"),
+        # re.compile(r"numpy\..*"),
     ]
+    ignore_globals = {
+        ("tempfile", "tempdir"),
+        ("tempfile", "_name_sequence"),
+    }
 
 
 config = Config()
@@ -227,10 +232,15 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
         if module_regex.search(obj.__module__):
             return (freeze_module(obj.__module__), obj.__qualname__)
     closure = getclosurevars(obj)
+    myglobals = {
+        var: val
+        for var, val in closure.globals.items()
+        if (obj.__module__, var) not in config.ignore_globals
+    }
     data = {
         "code": obj.__code__,
         "closure nonlocals": sort_dict(closure.nonlocals),
-        "closure globals": sort_dict(closure.globals),
+        "closure globals": sort_dict(myglobals),
     }
     # Simplify data by removeing empty items.
     data = {key: val for key, val in data.items() if val}
@@ -372,6 +382,15 @@ def _(obj: re.Match[str], tabu: Set[int], level: int) -> Hashable:
     return (obj.regs, _freeze(obj.re, tabu, level + 1), obj.string)
 
 
+@freeze_dispatch.register(_thread.RLock)
+@freeze_dispatch.register(_thread.LockType)
+def _(obj: Any, tabu: Set[int], level: int) -> Hashable:
+    # Locks are usually "control variables";
+    # They effect how an output is produced but not what output is produced (e.g. in race-free code).
+    # If you are trying to freeze a datastructure where the locks matter, write a __getfrozenstate__ for it.
+    return b"lock"
+
+
 try:
     import tqdm  # noqa: autoimport
 except ImportError:
@@ -400,9 +419,7 @@ else:
     @freeze_dispatch.register
     def _(obj: matplotlib.figure.Figure, tabu: Set[int], level: int) -> Hashable:
         if not has_mpld3:
-            raise RuntimeError(
-                "Can't serialize matplotlib figures without mpld3."
-            )
+            raise RuntimeError("Can't serialize matplotlib figures without mpld3.")
         file = io.StringIO()
         mpld3.save_json(obj, file)
         data = json.loads(file.getvalue())

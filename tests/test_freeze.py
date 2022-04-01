@@ -1,3 +1,4 @@
+import _thread
 import base64
 import copy
 import functools
@@ -9,10 +10,13 @@ import pickle
 import re
 import subprocess
 import sys
+import tempfile
+import threading
 import zlib
 from pathlib import Path
-from typing import Any, Hashable, Iterable, List, Mapping, Set, cast
+from typing import Any, Hashable, Iterable, List, Mapping, Set, Tuple, cast
 
+import astropy.utils.data  # type: ignore
 import matplotlib.figure
 import numpy
 import pandas
@@ -23,16 +27,18 @@ from tqdm import tqdm
 from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config, freeze
 
 
-def print_inequality_in_hashables(x: Hashable, y: Hashable) -> None:
+def print_inequality_in_hashables(
+    x: Hashable, y: Hashable, stack: Tuple[str, ...] = ()
+) -> None:
     if isinstance(x, tuple) and isinstance(y, tuple):
-        for xi, yi in itertools.zip_longest(x, y):
-            print_inequality_in_hashables(xi, yi)
+        for i, (xi, yi) in enumerate(itertools.zip_longest(x, y)):
+            print_inequality_in_hashables(xi, yi, stack + (f"[{i}]",))
     elif isinstance(x, frozenset) and isinstance(y, frozenset):
         if x ^ y:
-            print("x ^ y == ", x ^ y)
+            print("x ^ y == ", x ^ y, "at obj" + "".join(stack))
     else:
         if x != y:
-            print(x, "!=", y)
+            print(x, "!=", y, "at obj" + "".join(stack))
 
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
@@ -141,6 +147,7 @@ non_equivalents: Mapping[str, Any] = {
         functools.partial(function_test, 3),
         functools.partial(function_test, 4),
     ],
+    "astropy functions": [astropy.utils.data.get_pkg_data_fileobj, dir(tempfile)],
 }
 
 
@@ -276,6 +283,7 @@ equivalents: Mapping[str, List[Any]] = {
         functools.partial(function_test, 3),
         functools.partial(function_test, 3),
     ],
+    "locky objects": [_thread.allocate_lock(), threading.Lock(), threading.RLock()],
 }
 
 

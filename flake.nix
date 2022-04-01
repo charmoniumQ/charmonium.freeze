@@ -58,7 +58,7 @@
                 touch build/poetry-$(sha1sum poetry.lock | cut -f1 -d' ')
             fi
             mkdir -p build/bin
-            [ ! -f build/bin/pypy3.8 ] || ln -s $(which pypy3) build/bin/pypy3.8
+            [ ! -e build/bin/pypy3.8 ] || ln -s $(which pypy3) build/bin/pypy3.8
             export PREPEND_TO_PS1="(${name}) "
             export PYTHONNOUSERSITE=true
             export VIRTUAL_ENV=$(poetry env info --path)
