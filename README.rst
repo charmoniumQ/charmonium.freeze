@@ -97,7 +97,7 @@ It even works on custom types.
 >>> s = Struct()
 >>> s.attr = 4
 >>> freeze(s)
-(('args', ('Struct',)), ('state', (('attr', 4),)))
+(('args', (('Struct', (('__doc__', None), ('frobnicate', ...))),)), ('state', (('attr', 4),)))
 
 And methods, functions, lambdas, etc.
 
@@ -109,7 +109,9 @@ And methods, functions, lambdas, etc.
    ('bytecode', b'|\x00d\x01\x17\x00S\x00'))),)
 >>> import functools
 >>> pprint(freeze(functools.partial(print, 123)))
-(('constructor', 'partial'),
+(('constructor',
+  ('partial',
+   ...)),
  ('args', ('print',)),
  ('state', ('print', (123,), (), None)))
 >>> pprint(freeze(Struct.frobnicate))
@@ -162,7 +164,7 @@ Special cases
     >>> s = Struct()
     >>> s.attr = 4
     >>> pprint(freeze(s))
-    (('args', ('Struct',)), ('state', (('attr', 4),)))
+    (('args', (('Struct', (('__doc__', None),)),)), ('state', (('attr', 4),)))
     >>> # which is based on the Pickle protocol's definition of `__reduce__`:
     >>> pprint(s.__reduce__())
     (<function _reconstructor at 0x...>,
@@ -326,6 +328,6 @@ TODO
 - ☐ Performance
 
   - ☐ Make performance benchmarks.
-  - ☐ Memoize the hash of immutable data.
-
-    - Note: this might not work, because immutable data can still contain pointers to mutable data, e.g.: in ``a = ([])``, ``a`` is immutable, but ``a[0]`` is not.
+  - ☐ Memoize the hash of immutable data:
+    - If function contains no locals or globals except other immutables, it is immutable.
+    - If a collection is immutable and contains only immutables, it is immutable.

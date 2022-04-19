@@ -1,6 +1,7 @@
-import _thread
 import base64
+import contextlib
 import copy
+import datetime
 import functools
 import io
 import itertools
@@ -14,9 +15,8 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
-from typing import Any, Hashable, IO, Iterable, List, Mapping, Set, Optional, Tuple, cast
+from typing import Any, Hashable, IO, Iterable, List, Mapping, Set, Optional, Tuple, Type, cast
 
-import astropy.utils.data  # type: ignore
 import matplotlib.figure
 import numpy
 import pandas
@@ -79,11 +79,41 @@ def _(_obj: int) -> int:
 def function_test(obj: int) -> int:
     return obj
 
+def get_class(i: int) -> Type[Type]:
+    class A:
+        i: int = 0
+        def foo(self):
+            return self.i
+    A.i = i
+    return A
+
+
+class ClassWithStaticMethod:
+    @staticmethod
+    def foo() -> int:
+        return 1234
+    @classmethod
+    def bar(Cls) -> int:
+        return len(Cls.__name__)
+    def baz(self) -> int:
+        return 3142
+
 
 global0 = 0
 global1 = 1
 readme_rpb = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb.seek(10)
+
+def generator():
+    yield from range(10)
+
+generator0 = generator()
+generator1 = generator()
+next(generator1)
+context_manager = contextlib.contextmanager(generator)
+
+range10p1 = iter(range(10))
+next(range10p1)
 
 # pylint: disable=consider-using-with
 non_equivalents: Mapping[str, Any] = {
@@ -99,13 +129,24 @@ non_equivalents: Mapping[str, Any] = {
     "dict with diff order": [{"a": 1, "b": 2}, {"b": 2, "a": 1}],
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
     "@functools.singledispatch": [single_dispatch_test, determ_hash, freeze],
-    "function": [cast, tqdm],
+    "function": [cast, tqdm, *dir(tempfile)],
+    "unbound methods": [ClassWithStaticMethod.foo, ClassWithStaticMethod.baz],
+    "bound methods": [ClassWithStaticMethod.bar, ClassWithStaticMethod().baz],
     "lambda": [lambda: 1, lambda: 2, lambda: global0, lambda: global1],
     "builtin_function": [open, input],
     "code": [freeze.__code__, determ_hash.__code__],
     "module": [zlib, pickle],
+    "range": [range(10), range(20)],
+    "iterator": [iter(range(10)), range10p1],
+    # TODO: make freeze work on generators
+    # "generator": [generator0, generator1],
+    "context manager": [context_manager],
     "logger": [logging.getLogger("a.b"), logging.getLogger("a.c")],
-    "type": [List[int], List[float]],
+    "type": [List[int], List[float], ClassWithStaticMethod],
+    "class": [WithProperties, WithGetFrozenState],
+    "diff classes with same name": [get_class(3), get_class(4)],
+    "obj of diff classes with the same name": [get_class(3)(), get_class(4)()],
+    "instance method of diff classes with same name": [get_class(3)().foo, get_class(4)().foo],
     "io.BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"def")],
     "io.StringIO": [io.StringIO("abc"), io.StringIO("def")],
     "io.TextIOWrapper": [open("/tmp/test1", "w"), open("/tmp/test2", "w"), sys.stdout],
@@ -137,7 +178,7 @@ non_equivalents: Mapping[str, Any] = {
     "Path": [Path(), Path("abc"), Path("def")],
     "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4, dtype=int), numpy.ones(4)],
     "obj with properties": [WithProperties(3), WithProperties(4)],
-    "tqdm": [tqdm(range(10), disable=True)],
+    # "tqdm": [tqdm(range(10), disable=True)], # TODO: uncomment
     "pandas.DataFrame": [
         pandas.DataFrame(data={"col1": [1, 2], "col2": [3, 4]}),
         pandas.DataFrame(data={"col1": [1, 3], "col2": [5, 4]}),  # change data
@@ -150,7 +191,8 @@ non_equivalents: Mapping[str, Any] = {
         functools.partial(function_test, 3),
         functools.partial(function_test, 4),
     ],
-    "astropy functions": [astropy.utils.data.get_pkg_data_fileobj, dir(tempfile)],
+    "datetime": [datetime.timedelta(days=3), datetime.timedelta(days=4)],
+    "locky objects": [threading.Lock(), threading.RLock()],
 }
 
 
@@ -171,7 +213,8 @@ def test_freeze_works(caplog: pytest.LogCaptureFixture, input_kind: str) -> None
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
-def test_freeze_total_uniqueness(input_kind: str) -> None:
+def test_freeze_total_uniqueness(caplog: pytest.LogCaptureFixture, input_kind: str) -> None:
+    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
     values = non_equivalents[input_kind]
     frozen_values = [(value, freeze(value)) for value in values]
     for i, (this_value, this_freeze) in enumerate(frozen_values):
@@ -189,6 +232,7 @@ non_copyable_types = {
     "io.BufferedWriter",
     "io.BufferedRandom",
     "tqdm",
+    "locky objects",
 }
 
 
@@ -275,6 +319,8 @@ equivalents: Mapping[str, List[Any]] = {
         p,
         # when p gets hashed, the hash gets cached in an extra field.
     ],
+    "diff identical class": [get_class(3), get_class(3)],
+    "instances of diff identical classes": [get_class(3)(), get_class(3)()],
     "dict with same order": [{"a": 1, "b": 2}, {"a": 1, "b": 2}],
     "object with getfrozenstate": [WithGetFrozenState(3), WithGetFrozenState(4)],
     "logging.Logger": [logging.getLogger("a.b"), logging.getLogger("a.b")],
@@ -292,7 +338,8 @@ equivalents: Mapping[str, List[Any]] = {
         functools.partial(function_test, 3),
         functools.partial(function_test, 3),
     ],
-    "locky objects": [_thread.allocate_lock(), threading.Lock(), threading.RLock()],
+    "threading.Lock": [threading.Lock(), threading.Lock()],
+    "threading.RLock": [threading.RLock(), threading.RLock()],
 }
 
 

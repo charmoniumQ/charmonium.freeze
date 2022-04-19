@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import _thread
 import copyreg
 import functools
 import importlib
@@ -11,7 +10,7 @@ import re
 import sys
 import textwrap
 import types
-import weakref
+from pathlib import Path
 from typing import Any, Callable, Dict, Hashable, List, Set, Tuple, Type, cast
 
 from .util import getclosurevars, has_callable, sort_dict, specializes_pickle
@@ -19,19 +18,79 @@ from .util import getclosurevars, has_callable, sort_dict, specializes_pickle
 logger = logging.getLogger("charmonium.freeze")
 
 
+# TODO: constant is a bad name
 class Config:
     recursion_limit = 50
-    constant_modules = {
-        "copyreg",
-    }
-    constant_modules_regex: List[re.Pattern[str]] = [
-        # re.compile(r"matplotlib\..*"),
-        # re.compile(r"theano\..*"),
-        # re.compile(r"numpy\..*"),
-    ]
+
+    # Put global variables which do not affect the result computation here.
+    # Especially those which mutate without affecting the computation.
     ignore_globals = {
         ("tempfile", "tempdir"),
         ("tempfile", "_name_sequence"),
+        ("threading", "_active"),
+        ("threading", "_limbo"),
+    }
+
+    # Put paths to source code that where we can assume that source code is constant.
+    # We will still track its statefulness though.
+    constant_files = {
+        Path(io.__file__).parent
+    }
+
+    # Put objects which do not affect the result computation here.
+    # Especially those which are non-picklable or which will mutate (without affecting the computation).
+    constant_objects = {
+        ("_abc", "_abc_data"),
+        ("_thread", "RLock"),
+        ("_thread", "LockType"),
+        ("_thread", "lock"),
+        ("threading", "local"),
+        ("multiprocessing.synchronize", "Lock"),
+        ("multiprocessing.synchronize", "RLock"),
+        ("builtins", "weakref"),
+        ("builtins", "PyCapsule"),
+        ("weakref", "WeakKeyDictionary"),
+        ("weakref", "WeakValueDictionary"),
+        ("weakref", "WeakSet"),
+        ("weakref", "KeyedRef"),
+        ("weakref", "WeakMethod"),
+        ("weakref", "ReferenceType"),
+        ("weakref", "ProxyType"),
+        ("weakref", "CallableProxyType"),
+        ("_weakrefset", "WeakSet"),
+        # TODO: Remove these when we have caching
+        # THey are purely performance (not correctness)
+        ("threading", "Thread"),
+        ("threading", "Event"),
+        ("threading", "_DummyThread"),
+        ("threading", "Condition"),
+    }
+
+    constant_classes = {
+        ("builtins", None),
+
+        # TODO: Remove these when we have caching
+        # THey are purely performance (not correctness)
+        ("ABC", None),
+        ("ABCMeta", None),
+        ("threading", "Event"),
+        ("threading", "Condition"),
+        ("threading", "RLock"),
+        ("threading", "Thread"),
+        ("logging", "Logger"),
+
+        # TODO: investigate why naively freezing DataFrame is so long.
+        ("pandas.core.frame", "DataFrame"),
+        ("pandas.core.internals.managers", "BlockManager"),
+        ("pandas.core.indexes.range", "RangeIndex"),
+        ("pandas.core.indexes.base", "Index"),
+        ("pandas.core.indexes.numeric", "Int64Index"),
+        ("matplotlib.figure", "Figure"),
+    }
+
+    # TODO: think about this
+    constant_functions = {
+        ("copyreg", None),
     }
 
 
@@ -100,12 +159,15 @@ def freeze_pickle(obj: Any) -> Dict[str, Any]:
     )
     reduce = cast(Callable[[int], Tuple[Any, ...]], has_callable(obj, "__reduce__"))
 
-    if reduce_ex:
-        reduced = reduce_ex(4)
-    elif reduce:
-        reduced = reduce()
-    else:
-        raise TypeError(f"{type(obj)} {obj} is not picklable")
+    try:
+        if reduce_ex:
+            reduced = reduce_ex(4)
+        elif reduce:
+            reduced = reduce()
+        else:
+            raise TypeError(f"{type(obj)} {obj} is not picklable")
+    except TypeError as e:
+        raise TypeError(f"Consider adding {(obj.__class__.__module__, obj.__class__.__name__)} to config.constant_objects") from e
 
     data: Dict[str, Any] = {}
 
@@ -139,6 +201,9 @@ def freeze_pickle(obj: Any) -> Dict[str, Any]:
 def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
     getfrozenstate = has_callable(obj, "__getfrozenstate__")
     tabu = tabu | {id(obj)}
+    type_pair = (obj.__class__.__module__, obj.__class__.__name__)
+    if type_pair in config.constant_objects:
+        return type_pair[1]
     if getfrozenstate:
         # getfrozenstate is custom-built for charmonium.freeze
         # It should take precedence.
@@ -182,7 +247,6 @@ def _(obj: List[Any], tabu: Set[int], level: int) -> Hashable:
 
 @freeze_dispatch.register(set)
 @freeze_dispatch.register(frozenset)
-@freeze_dispatch.register(weakref.WeakSet)
 def _(obj: Set[Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     # "Python has never made guarantees about this ordering (and it typically varies between 32-bit and 64-bit builds)."
@@ -192,8 +256,6 @@ def _(obj: Set[Any], tabu: Set[int], level: int) -> Hashable:
 
 @freeze_dispatch.register(dict)
 @freeze_dispatch.register(types.MappingProxyType)
-@freeze_dispatch.register(weakref.WeakKeyDictionary)
-@freeze_dispatch.register(weakref.WeakValueDictionary)
 def _(obj: dict[Any, Any], tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     # The elements of a dict remember their insertion order, as of Python 3.7.
@@ -210,30 +272,32 @@ def _(obj: memoryview, tabu: Set[int], level: int) -> Hashable:
     return obj.tobytes()
 
 
-def freeze_module(module: str) -> Hashable:
-    parts = module.split(".")
-    parent_modules = [parts[0]]
-    for part in parts[1:]:
-        parent_modules.append(parent_modules[-1] + "." + part)
-    versions = list(
-        filter(
-            bool,
-            [
-                getattr(importlib.import_module(module), "__version__", None)
-                for module in parent_modules
-            ],
+@freeze_dispatch.register(type)
+def _(obj: Type[Any], tabu: Set[int], level: int) -> Hashable:
+    type_pair = (obj.__module__, obj.__name__)
+    if (type_pair[0], None) in config.constant_classes or type_pair in config.constant_classes:
+        return type_pair[1]
+    else:
+        # TODO: add classes on the __mro__
+        attrs = {
+            attr_key: attr_val
+            for attr_key, attr_val in obj.__dict__.items()
+            if not isinstance(attr_val, (types.GetSetDescriptorType, types.MemberDescriptorType, property)) and attr_key != "__module__" and attr_key != "__slotnames__"
+            # Some scripts are designed to be either executed or imported.
+            # In that case, the __module__ can be either __main__ or a qualified module name.
+            # As such, I exclude the name of the module containing the class.
+        }
+        return (
+            type_pair[1],
+            _freeze(sort_dict(attrs), tabu | {id(obj)}, level + 1),
         )
-    )
-    return (module,) + tuple(versions)
 
 
 @freeze_dispatch.register
 def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
-    if obj.__module__ in config.constant_modules:
-        return (freeze_module(obj.__module__), obj.__qualname__)
-    for module_regex in config.constant_modules_regex:
-        if module_regex.search(obj.__module__):
-            return (freeze_module(obj.__module__), obj.__qualname__)
+    type_pair = (obj.__module__, obj.__name__)
+    if (type_pair[0], None) in config.constant_functions or type_pair in config.constant_functions:
+        return type_pair[1]
     closure = getclosurevars(obj)
     myglobals = {
         var: val
@@ -241,9 +305,12 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
         if (obj.__module__, var) not in config.ignore_globals
     }
     nonlocals = sort_dict(closure.nonlocals)
+    # Special case for functools.single_distapch:
+    # We need to ignore the following non-locals, as their mutation do not affect the actual computation.
     if obj.__name__ == "dispatch" and obj.__module__ == "functools":
         del nonlocals["cache_token"]
         del nonlocals["dispatch_cache"]
+        del nonlocals["registry"]
     data = {
         "code": obj.__code__,
         "closure nonlocals": sort_dict(nonlocals),
@@ -255,6 +322,36 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
 
 
 @freeze_dispatch.register
+def _(obj: types.GeneratorType, tabu: Set[int], level: int) -> Hashable:
+    return _freeze(obj.gi_code, tabu | {id(obj)}, level + 1)
+
+@freeze_dispatch.register
+def _(obj: staticmethod, tabu: Set[int], level: int) -> Hashable:
+    return _freeze(obj.__func__, tabu, level + 1)
+
+@freeze_dispatch.register
+def _(obj: classmethod, tabu: Set[int], level: int) -> Hashable:
+    return _freeze(obj.__func__, tabu, level + 1),
+
+@freeze_dispatch.register
+def _(obj: types.MethodType, tabu: Set[int], level: int) -> Hashable:
+    # Freezing self freezes the instance data and the methods.
+    # obj was a method.
+    # Therefore obj will be included.
+    return _freeze(obj.__self__, tabu | {id(obj)}, level + 1)
+
+
+@freeze_dispatch.register(types.WrapperDescriptorType)
+@freeze_dispatch.register(types.MethodDescriptorType)
+@freeze_dispatch.register(types.MethodDescriptorType)
+@freeze_dispatch.register(types.ClassMethodDescriptorType)
+def _(obj: Any, _tabu: Set[int], _level: int) -> Hashable:
+    # Freezing self freezes the instance data and the methods.
+    # obj was a method.
+    # Therefore obj will be included.
+    return obj.__name__
+
+@freeze_dispatch.register
 def _(obj: types.BuiltinFunctionType, _tabu: Set[int], _level: int) -> Hashable:
     return obj.__name__
 
@@ -262,17 +359,29 @@ def _(obj: types.BuiltinFunctionType, _tabu: Set[int], _level: int) -> Hashable:
 @freeze_dispatch.register
 def _(obj: types.CodeType, tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
+    source_loc = Path(obj.co_filename)
+    if any(source_loc.is_relative_to(constant_file) for constant_file in config.constant_files):
+        bytecode = "constant"
+    else:
+        bytecode = _freeze(obj.co_code, tabu, level + 1)
     return (
         ("name", obj.co_name),
         ("varnames", obj.co_varnames),
         ("constants", _freeze(obj.co_consts, tabu, level + 1)),
-        ("bytecode", _freeze(obj.co_code, tabu, level + 1)),
+        ("bytecode", bytecode),
     )
 
 
 @freeze_dispatch.register
-def _(obj: types.ModuleType, _tabu: Set[int], _level: int) -> Hashable:
-    return freeze_module(obj.__name__)
+def _(obj: types.ModuleType, tabu: Set[int], level: int) -> Hashable:
+    # TODO: Make a comprehensive freeze for module types.
+    # attrs = {
+    #     attr_name: getattr(obj, attr_name, None)
+    #     for attr_name in dir(obj)
+    #     if hasattr(obj, attr_name)
+    # }
+    # return _freeze(sort_dict(attrs), tabu | {id(obj)}, level)
+    return obj.__name__
 
 
 @freeze_dispatch.register
@@ -280,13 +389,6 @@ def _(obj: logging.Logger, _tabu: Set[int], _level: int) -> Hashable:
     # The client should be able to change the logger without changing the computation.
     # But the _name_ of the logger specifies where the side-effect goes, so it should matter.
     return obj.name
-
-
-@freeze_dispatch.register(type)
-def _(obj: Type[Any], _tabu: Set[int], _level: int) -> Hashable:
-    # TODO: Include methods defined on types.
-    return obj.__qualname__
-    # raise NotImplementedError("`freeze` is Not implemented for types")
 
 
 @freeze_dispatch.register
@@ -390,15 +492,6 @@ def _(obj: re.Match[str], tabu: Set[int], level: int) -> Hashable:
     return (obj.regs, _freeze(obj.re, tabu, level + 1), obj.string)
 
 
-@freeze_dispatch.register(_thread.RLock)
-@freeze_dispatch.register(_thread.LockType)
-def _(obj: Any, tabu: Set[int], level: int) -> Hashable:
-    # Locks are usually "control variables";
-    # They effect how an output is produced but not what output is produced (e.g. in race-free code).
-    # If you are trying to freeze a datastructure where the locks matter, write a __getfrozenstate__ for it.
-    return b"lock"
-
-
 try:
     import tqdm  # noqa: autoimport
 except ImportError:
@@ -407,7 +500,7 @@ else:
 
     @freeze_dispatch.register(tqdm.tqdm)
     def _(obj: tqdm.tqdm[Any], tabu: Set[int], level: int) -> Hashable:
-        # Unfortunately, the tqdm object contains the timestamp of the last pring, which would result in a different state every time.
+        # Unfortunately, the tqdm object contains the timestamp of the last ping, which would result in a different state every time.
         return _freeze(obj.iterable, tabu | {id(obj)}, level + 1)
 
 
