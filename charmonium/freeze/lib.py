@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copyreg
 import functools
-import importlib
 import io
 import json
 import logging
@@ -86,6 +85,7 @@ class Config:
         ("pandas.core.indexes.base", "Index"),
         ("pandas.core.indexes.numeric", "Int64Index"),
         ("matplotlib.figure", "Figure"),
+        ("tqdm.std", "tqdm"),
     }
 
     # TODO: think about this
@@ -203,7 +203,7 @@ def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     type_pair = (obj.__class__.__module__, obj.__class__.__name__)
     if type_pair in config.constant_objects:
-        return type_pair[1]
+        return cast(str, type_pair[1])
     if getfrozenstate:
         # getfrozenstate is custom-built for charmonium.freeze
         # It should take precedence.
@@ -331,7 +331,7 @@ def _(obj: staticmethod, tabu: Set[int], level: int) -> Hashable:
 
 @freeze_dispatch.register
 def _(obj: classmethod, tabu: Set[int], level: int) -> Hashable:
-    return _freeze(obj.__func__, tabu, level + 1),
+    return _freeze(obj.__func__, tabu, level + 1)
 
 @freeze_dispatch.register
 def _(obj: types.MethodType, tabu: Set[int], level: int) -> Hashable:

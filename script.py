@@ -165,11 +165,19 @@ async def test() -> None:
                 # "dmypy",
                 # "run",
                 # "--",
-                "--explicit-package-bases",
                 "--namespace-packages",
-                *all_python_files,
+                "--package",
+                main_package,
             ],
             env_override={"MYPY_FORCE_COLOR": "1"},
+        ),
+        pretty_run(
+            [
+                "mypy",
+                "--namespace-packages",
+                *tests_dir.rglob("*.py"),
+            ],
+            env_override={"MYPY_FORCE_COLOR": "1", "PYTHONPATH": "tests:" + os.environ.get("PYTHONPATH", "")},
         ),
         pretty_run(
             [
@@ -190,7 +198,7 @@ async def test() -> None:
                 "radon",
                 "cc",
                 "--min",
-                "b",
+                "c",
                 "--show-complexity",
                 "--no-assert",
                 main_package_dir,
@@ -220,9 +228,9 @@ async def per_env_tests() -> None:
             # No daemon
             [
                 "mypy",
-                "--explicit-package-bases",
                 "--namespace-packages",
-                *map(str, all_python_files),
+                "--package",
+                main_package,
             ],
             env_override={"MYPY_FORCE_COLOR": "1"},
         ),
