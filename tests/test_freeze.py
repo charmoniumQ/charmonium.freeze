@@ -14,7 +14,7 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
-from typing import Any, Hashable, Iterable, List, Mapping, Set, Tuple, cast
+from typing import Any, Hashable, IO, Iterable, List, Mapping, Set, Optional, Tuple, cast
 
 import astropy.utils.data  # type: ignore
 import matplotlib.figure
@@ -28,17 +28,17 @@ from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config
 
 
 def print_inequality_in_hashables(
-    x: Hashable, y: Hashable, stack: Tuple[str, ...] = ()
+    x: Hashable, y: Hashable, stack: Tuple[str, ...] = (), file: Optional[IO[str]] = None,
 ) -> None:
     if isinstance(x, tuple) and isinstance(y, tuple):
         for i, (xi, yi) in enumerate(itertools.zip_longest(x, y)):
             print_inequality_in_hashables(xi, yi, stack + (f"[{i}]",))
     elif isinstance(x, frozenset) and isinstance(y, frozenset):
         if x ^ y:
-            print("x ^ y == ", x ^ y, "at obj" + "".join(stack))
+            print("x ^ y == ", x ^ y, "at obj" + "".join(stack), file=file)
     else:
         if x != y:
-            print(x, "!=", y, "at obj" + "".join(stack))
+            print(x, "!=", y, "at obj" + "".join(stack), file=file)
 
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
@@ -69,7 +69,11 @@ class WithGetFrozenState:
 
 @functools.singledispatch
 def single_dispatch_test(_obj: Any) -> Any:
-    return "Any"
+    return _obj
+
+@single_dispatch_test.register
+def _(_obj: int) -> int:
+    return _obj
 
 
 def function_test(obj: int) -> int:
@@ -94,8 +98,7 @@ non_equivalents: Mapping[str, Any] = {
     "dict of dicts": [dict(a=1, b=2, c=3), dict(a=1, b=2, c=4)],
     "dict with diff order": [{"a": 1, "b": 2}, {"b": 2, "a": 1}],
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
-    "singledispatch function": [single_dispatch_test],
-    # freeze, determ_hash],
+    "@functools.singledispatch": [single_dispatch_test, determ_hash, freeze],
     "function": [cast, tqdm],
     "lambda": [lambda: 1, lambda: 2, lambda: global0, lambda: global1],
     "builtin_function": [open, input],
@@ -189,15 +192,21 @@ non_copyable_types = {
 }
 
 
-@pytest.mark.parametrize("input_kind", non_equivalents.keys())
+@pytest.mark.parametrize("input_kind", non_equivalents.keys() - non_copyable_types)
 def test_determinism_over_copies(
     caplog: pytest.LogCaptureFixture, input_kind: str
 ) -> None:
     caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
-    if input_kind not in non_copyable_types:
-        for value in non_equivalents[input_kind]:
-            value_copy = copy.deepcopy(value)
-            assert freeze(value) == freeze(value_copy)
+    for value in non_equivalents[input_kind]:
+        freeze0 = freeze(copy.deepcopy(value))
+        if input_kind == "@functools.singledispatch":
+            # Call the singledispatch function to try and change its cache_token
+            value(345)
+            value((32, ((10), frozenset({"hello"}))))
+        freeze1 = freeze(value)
+        if freeze0 != freeze1:
+            print_inequality_in_hashables(freeze0, freeze1)
+        assert freeze0 == freeze1
 
 
 # This is a fixture because it should only be evaluated once.
@@ -240,10 +249,10 @@ def test_determinism_over_processes(
 ) -> None:
     caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
     for past_hash, value in zip(past_freezes[input_kind], non_equivalents[input_kind]):
-        print_inequality_in_hashables(past_hash, freeze(value))
-        assert past_hash == freeze(
-            value
-        ), f"Determinism-over-processes failed for {value}"
+        new_hash = freeze(value)
+        if past_hash != new_hash:
+            print_inequality_in_hashables(past_hash, new_hash)
+        assert past_hash == new_hash, f"Determinism-over-processes failed for {value}"
 
 
 p = Path()

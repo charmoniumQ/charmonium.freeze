@@ -292,8 +292,9 @@ TODO
   - ☑ Test hashing sets with different orders. Assert tests fail.
   - ☑ Test hashing dicts with different orders. Assert tests fail.
   - ☑ Don't include properties in hash.
-  - ☐ Support closures which include `import x` and `from x import y`
-  - ☐ Test for unique representation between types.
+  - ☐ Test that freeze of an object includes freeze of its instance methods.
+  - ☐ Freeze module by its attributes, unless module is constant.
+  - ☐ Support closures which include ``import x`` and ``from x import y``
   - ☐ Test functions with minor changes.
   - ☐ Test set/dict with diff hash.
   - ☐ Test obj with slots.
@@ -307,6 +308,7 @@ TODO
   - ☑ Make it easier to register a freeze method for a type.
   - ☑ Encapsulate global config `freeze` into object.
   - ☐ Move "get call graph" into its own package.
+  - ☐ Document configuration options.
 
 - ☐ Make ``freeze`` handle more types:
 

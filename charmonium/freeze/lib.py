@@ -142,7 +142,10 @@ def freeze_dispatch(obj: Any, tabu: Set[int], level: int) -> Hashable:
     if getfrozenstate:
         # getfrozenstate is custom-built for charmonium.freeze
         # It should take precedence.
-        return _freeze(getfrozenstate(), tabu, level + 1)
+        return (
+            _freeze(type(obj), tabu | {id(obj)}, level + 1),
+            _freeze(getfrozenstate(), tabu | {id(obj)}, level + 1),
+        )
     if specializes_pickle(obj):
         # Otherwise, we may be able to use the Pickle protocol.
         data = freeze_pickle(obj)
@@ -237,9 +240,13 @@ def _(obj: types.FunctionType, tabu: Set[int], level: int) -> Hashable:
         for var, val in closure.globals.items()
         if (obj.__module__, var) not in config.ignore_globals
     }
+    nonlocals = sort_dict(closure.nonlocals)
+    if obj.__name__ == "dispatch" and obj.__module__ == "functools":
+        del nonlocals["cache_token"]
+        del nonlocals["dispatch_cache"]
     data = {
         "code": obj.__code__,
-        "closure nonlocals": sort_dict(closure.nonlocals),
+        "closure nonlocals": sort_dict(nonlocals),
         "closure globals": sort_dict(myglobals),
     }
     # Simplify data by removeing empty items.
@@ -277,6 +284,7 @@ def _(obj: logging.Logger, _tabu: Set[int], _level: int) -> Hashable:
 
 @freeze_dispatch.register(type)
 def _(obj: Type[Any], _tabu: Set[int], _level: int) -> Hashable:
+    # TODO: Include methods defined on types.
     return obj.__qualname__
     # raise NotImplementedError("`freeze` is Not implemented for types")
 
