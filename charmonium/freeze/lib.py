@@ -39,6 +39,7 @@ class Config:
     # Put objects which do not affect the result computation here.
     # Especially those which are non-picklable or which will mutate (without affecting the computation).
     constant_objects = {
+        ("builtins", "_abc_data"),
         ("_abc", "_abc_data"),
         ("_thread", "RLock"),
         ("_thread", "LockType"),
