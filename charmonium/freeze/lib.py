@@ -96,6 +96,10 @@ class Config:
 
 config = Config()
 
+def is_relative_to(path: Path, source: Path) -> bool:
+    # Note that `path.relative_to(source)` is >= 3.8 :'(
+    return path.parts[:len(source.parts)] == source.parts
+
 
 def freeze(obj: Any) -> Hashable:
     "Injectively, deterministically maps objects to hashable, immutable objects."
@@ -360,7 +364,7 @@ def _(obj: types.BuiltinFunctionType, _tabu: Set[int], _level: int) -> Hashable:
 def _(obj: types.CodeType, tabu: Set[int], level: int) -> Hashable:
     tabu = tabu | {id(obj)}
     source_loc = Path(obj.co_filename)
-    if any(source_loc.is_relative_to(constant_file) for constant_file in config.constant_files):
+    if any(is_relative_to(source_loc, constant_file) for constant_file in config.constant_files):
         bytecode = "constant"
     else:
         bytecode = _freeze(obj.co_code, tabu, level + 1)
