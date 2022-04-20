@@ -44,6 +44,7 @@ class Config:
         ("_thread", "RLock"),
         ("_thread", "LockType"),
         ("_thread", "lock"),
+        ("_thread", "_local"),
         ("threading", "local"),
         ("multiprocessing.synchronize", "Lock"),
         ("multiprocessing.synchronize", "RLock"),
