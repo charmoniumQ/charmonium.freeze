@@ -516,22 +516,11 @@ except ImportError:
     pass
 else:
 
-    try:
-        import mpld3  # noqa: autoimport
-    except ImportError:
-        has_mpld3 = False
-    else:
-        has_mpld3 = True
-
     @freeze_dispatch.register
     def _(obj: matplotlib.figure.Figure, tabu: Set[int], level: int) -> Hashable:
-        if not has_mpld3:
-            raise RuntimeError("Can't serialize matplotlib figures without mpld3.")
-        file = io.StringIO()
-        mpld3.save_json(obj, file)
-        data = json.loads(file.getvalue())
-        data = {key: value for key, value in data.items() if key != "id"}
-        return _freeze(data, tabu | {id(obj)}, level + 1)
+        file = io.BytesIO()
+        obj.savefig(file, format="raw")
+        return file.getvalue()
 
 
 try:

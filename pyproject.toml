@@ -117,7 +117,6 @@ matplotlib = "^3.5.1"
 pandas = "^1.4.1"
 numpy = "^1.22.3"
 "charmonium.determ-hash" = "^0.2.2"
-mpld3 = "^0.5.8"
 
 [tool.poetry.dependencies]
 python = "^3.8"
