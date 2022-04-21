@@ -23,7 +23,10 @@ charmonium.freeze
 .. image:: https://github.com/charmoniumQ/charmonium.freeze/actions/workflows/main.yaml/badge.svg
    :alt: CI status
    :target: https://github.com/charmoniumQ/charmonium.freeze/actions/workflows/main.yaml
-.. image:: https://img.shields.io/github/last-commit/charmoniumQ/charmonium.determ_hash
+.. image:: https://codecov.io/gh/charmoniumQ/charmonium.freeze/branch/main/graph/badge.svg?token=56A97FFTGZ
+   :alt: Code Coverage
+   :target: https://codecov.io/gh/charmoniumQ/charmonium.freeze
+.. image:: https://img.shields.io/github/last-commit/charmoniumQ/charmonium.cache
    :alt: GitHub last commit
    :target: https://github.com/charmoniumQ/charmonium.freeze/commits
 .. image:: http://www.mypy-lang.org/static/mypy_badge.svg
