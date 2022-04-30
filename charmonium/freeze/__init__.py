@@ -1,3 +1,4 @@
+from . import freeze_basic, freeze_code, freeze_files, freeze_thirdparty
 from .lib import FreezeError as FreezeError
 from .lib import FreezeRecursionError as FreezeRecursionError
 from .lib import UnfreezableTypeError as UnfreezableTypeError

@@ -1,0 +1,149 @@
+# .py -> .txt so as not to offend tools that scan .py
+
+from typing import Generic, TypeVar
+T = TypeVar("T")
+
+from mypy.errors import CompileError
+from mypy.options import Options
+from mypy.build import BuildSource, build
+
+from mypyc.options import CompilerOptions
+from mypyc.errors import Errors
+from mypyc.irbuild.main import build_ir
+from mypyc.irbuild.mapper import Mapper
+from mypyc.analysis.dataflow import get_cfg
+from mypyc.common import TOP_LEVEL_NAME
+from mypyc.transform.exceptions import insert_exception_handling
+
+from pathlib import Path
+
+source_path = Path("charmonium/freeze/util.py")
+source_mod = "charmonium.freeze.util"
+
+options = Options()
+options.show_traceback = True
+options.use_builtins_fixtures = True
+options.strict_optional = True
+options.python_version = (3, 9)
+options.export_types = True
+options.preserve_asts = True
+options.per_module_options[source_mod] = {'mypyc': True}
+source = BuildSource(str(source_path), source_mod, source_path.read_text())
+result = build(sources=[source], options=options)
+if result.errors:
+    raise CompileError(result.errors)
+
+errors = Errors()
+compiler_options = CompilerOptions(capi_version=(3, 5))
+modules = build_ir([result.files[source_mod]], result.graph, result.types, Mapper({source_mod: None}), compiler_options, errors)
+if errors.num_errors:
+    raise CompileError(errors.new_messages())
+
+class OpVisitor(Generic[T]):
+    """Generic visitor over ops (uses the visitor design pattern)."""
+
+    def visit_goto(self, op: Goto) -> T:
+        raise NotImplementedError
+
+    def visit_branch(self, op: Branch) -> T:
+        raise NotImplementedError
+
+    def visit_return(self, op: Return) -> T:
+        raise NotImplementedError
+
+    def visit_unreachable(self, op: Unreachable) -> T:
+        raise NotImplementedError
+
+    def visit_assign(self, op: Assign) -> T:
+        raise NotImplementedError
+
+    def visit_assign_multi(self, op: AssignMulti) -> T:
+        raise NotImplementedError
+
+    def visit_load_error_value(self, op: LoadErrorValue) -> T:
+        raise NotImplementedError
+
+    def visit_load_literal(self, op: LoadLiteral) -> T:
+        raise NotImplementedError
+
+    def visit_get_attr(self, op: GetAttr) -> T:
+        raise NotImplementedError
+
+    def visit_set_attr(self, op: SetAttr) -> T:
+        raise NotImplementedError
+
+    def visit_load_static(self, op: LoadStatic) -> T:
+        raise NotImplementedError
+
+    def visit_init_static(self, op: InitStatic) -> T:
+        raise NotImplementedError
+
+    def visit_tuple_get(self, op: TupleGet) -> T:
+        raise NotImplementedError
+
+    def visit_tuple_set(self, op: TupleSet) -> T:
+        raise NotImplementedError
+
+    def visit_inc_ref(self, op: IncRef) -> T:
+        raise NotImplementedError
+
+    def visit_dec_ref(self, op: DecRef) -> T:
+        raise NotImplementedError
+
+    def visit_call(self, op: Call) -> T:
+        raise NotImplementedError
+
+    def visit_method_call(self, op: MethodCall) -> T:
+        raise NotImplementedError
+
+    def visit_cast(self, op: Cast) -> T:
+        raise NotImplementedError
+
+    def visit_box(self, op: Box) -> T:
+        raise NotImplementedError
+
+    def visit_unbox(self, op: Unbox) -> T:
+        raise NotImplementedError
+
+    def visit_raise_standard_error(self, op: RaiseStandardError) -> T:
+        raise NotImplementedError
+
+    def visit_call_c(self, op: CallC) -> T:
+        raise NotImplementedError
+
+    def visit_truncate(self, op: Truncate) -> T:
+        raise NotImplementedError
+
+    def visit_load_global(self, op: LoadGlobal) -> T:
+        raise NotImplementedError
+
+    def visit_int_op(self, op: IntOp) -> T:
+        raise NotImplementedError
+
+    def visit_comparison_op(self, op: ComparisonOp) -> T:
+        raise NotImplementedError
+
+    def visit_load_mem(self, op: LoadMem) -> T:
+        raise NotImplementedError
+
+    def visit_set_mem(self, op: SetMem) -> T:
+        raise NotImplementedError
+
+    def visit_get_element_ptr(self, op: GetElementPtr) -> T:
+        raise NotImplementedError
+
+    def visit_load_address(self, op: LoadAddress) -> T:
+        raise NotImplementedError
+
+    def visit_keep_alive(self, op: KeepAlive) -> T:
+        raise NotImplementedError
+
+
+module = list(modules.values())[0]
+for fn in module.functions:
+    insert_exception_handling(fn)
+    if fn.name != TOP_LEVEL_NAME:
+        cfg = get_cfg(fn.blocks)
+        print(fn)
+        print("\n".join(map(str, fn.blocks[0].ops)))
+        print()

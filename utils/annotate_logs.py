@@ -1,7 +1,7 @@
-from typing import List
-
 import re
 import sys
+from typing import List
+
 
 class LineObj:
     def __init__(self, line_no, children) -> None:
@@ -11,8 +11,9 @@ class LineObj:
     def __repr__(self) -> str:
         return f"LineObj({self.line_no}, {self.children})"
 
+
 def get_line_lengths(lines: List[str], ignore_prefix: int = 0) -> List[int]:
-    line_lengths = [0]*len(lines)
+    line_lengths = [0] * len(lines)
 
     stack = []
     for line_no, line in enumerate(lines):
@@ -42,6 +43,7 @@ def get_line_lengths(lines: List[str], ignore_prefix: int = 0) -> List[int]:
 
     return line_lengths
 
+
 test = [
     "  a",
     "a",
@@ -55,24 +57,23 @@ assert get_line_lengths(test) == test_result, get_line_lengths(test)
 
 if __name__ == "__main__":
     """
-# Run tests
-pytest --exitfirst > log
+    # Run tests
+    pytest --exitfirst > log
 
-# Trim pytest output
-cut --bytes=38- log > tmp
+    # Trim pytest output
+    cut --bytes=38- log > tmp
 
-# Annotate log with descendent counts
-python utils/annotate_logs.py < tmp > log2
+    # Annotate log with descendent counts
+    python utils/annotate_logs.py < tmp > log2
 
-# Get the descendent counts
-cut --field=1 --delimiter=' ' log2 > tmp
+    # Get the descendent counts
+    cut --field=1 --delimiter=' ' log2 > tmp
 
-# Get top 30 counts
-sort --numeric --reverse | head --lines 30
+    # Get top 30 counts
+    sort --numeric --reverse | head --lines 30
 
-# all in one:
-pytest --exitfirst > log || (cut --bytes=38- log | python utils/annotate_logs.py > log2 && cut --field=1 --delimiter=' ' log2 | sort --numeric --reverse | head --lines 30)
-"""
+    # all in one:
+    pytest --exitfirst > log || (cut --bytes=38- log | python utils/annotate_logs.py > log2 && cut --field=1 --delimiter=' ' log2 | sort --numeric --reverse | head --lines 30)"""
     lines = list(sys.stdin)
     ignore_prefix = int(dict(enumerate(sys.argv)).get(1, 0))
     line_lengths = get_line_lengths(lines, ignore_prefix)

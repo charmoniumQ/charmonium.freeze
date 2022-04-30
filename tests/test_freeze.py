@@ -1,22 +1,47 @@
+from pprint import pprint
 import base64
 import copy
+import textwrap
 import itertools
 import logging
 import os
 import pickle
-from pathlib import Path
 import subprocess
 import sys
-from typing import Any, Hashable, IO, Iterable, List, Mapping, Set, Optional, Tuple, cast
+from pathlib import Path
+from typing import (
+    IO,
+    Any,
+    Hashable,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    cast,
+)
 
 import pytest
-from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config, freeze
 from charmonium.determ_hash import determ_hash
+from obj_test_cases import (
+    equivalents,
+    immutables,
+    non_copyable_types,
+    non_equivalents,
+    non_freezable_types,
+    non_immutables,
+)
 
-from obj_test_cases import equivalents, non_equivalents, non_copyable_types, non_freezable_types
+from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config, freeze
+from charmonium.freeze.lib import _freeze
+
 
 def print_inequality_in_hashables(
-    x: Hashable, y: Hashable, stack: Tuple[str, ...] = (), file: Optional[IO[str]] = None,
+    x: Hashable,
+    y: Hashable,
+    stack: Tuple[str, ...] = (),
+    file: Optional[IO[str]] = None,
 ) -> None:
     if isinstance(x, tuple) and isinstance(y, tuple):
         for i, (xi, yi) in enumerate(itertools.zip_longest(x, y)):
@@ -28,11 +53,17 @@ def print_inequality_in_hashables(
         if x != y:
             print(x, "!=", y, "at obj" + "".join(stack), file=file)
 
-def mark_failing(params: Iterable[Any], failing: Set[Any]) -> Iterable[Any]:
-    return [
-        pytest.param(param, marks=[pytest.mark.xfail]) if param in failing else param
-        for param in params
-    ]
+
+def test_immmutables(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
+    for immutable in immutables:
+        assert _freeze(immutable, {}, 0, 0)[1], _freeze(immutable, {}, 0, 0)
+
+
+def test_non_immmutables(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
+    for non_immutable in non_immutables:
+        assert not _freeze(non_immutable, {}, 0, 0)[1], _freeze(non_immutable, {}, 0, 0)
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
@@ -45,16 +76,20 @@ def test_freeze_works(caplog: pytest.LogCaptureFixture, input_kind: str) -> None
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
-def test_freeze_total_uniqueness(caplog: pytest.LogCaptureFixture, input_kind: str) -> None:
+def test_freeze_total_uniqueness(
+    caplog: pytest.LogCaptureFixture, input_kind: str
+) -> None:
     caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
     values = non_equivalents[input_kind]
     frozen_values = [(value, freeze(value)) for value in values]
     for i, (this_value, this_freeze) in enumerate(frozen_values):
         for j, (that_value, that_freeze) in enumerate(frozen_values):
             if i != j:
-                assert (
-                    this_freeze != that_freeze
-                ), f"freeze({this_value}) should be different than freeze({that_value})"
+                if this_freeze == that_freeze:
+                    print(i, j)
+                    pprint(this_freeze)
+                    pprint(that_freeze)
+                assert this_freeze != that_freeze
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys() - non_copyable_types)
@@ -71,6 +106,8 @@ def test_determinism_over_copies(
         freeze1 = freeze(value)
         if freeze0 != freeze1:
             print_inequality_in_hashables(freeze0, freeze1)
+            pprint(freeze0)
+            pprint(freeze1)
         assert freeze0 == freeze1
 
 
@@ -94,16 +131,14 @@ def fixture_past_freezes() -> Mapping[str, List[List[Any]]]:
 
 
 if __name__ == "__main__":
-    sys.stdout.buffer.write(
-        base64.b64encode(
-            pickle.dumps(
-                {
-                    value_kind: [freeze(value) for value in values]
-                    for value_kind, values in non_equivalents.items()
-                }
-            )
-        )
-    )
+    data = {
+        value_kind: [freeze(value) for value in values]
+        for value_kind, values in non_equivalents.items()
+    }
+    data_ser = "\n".join(textwrap.wrap(base64.b64encode(pickle.dumps(data)).decode()))
+    data_deser = pickle.loads(base64.b64decode(data_ser))
+    assert data_deser == data
+    sys.stdout.write(data_ser)
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
@@ -117,6 +152,8 @@ def test_determinism_over_processes(
         new_hash = freeze(value)
         if past_hash != new_hash:
             print_inequality_in_hashables(past_hash, new_hash)
+            pprint(past_hash)
+            pprint(new_hash)
         assert past_hash == new_hash, f"Determinism-over-processes failed for {value}"
 
 

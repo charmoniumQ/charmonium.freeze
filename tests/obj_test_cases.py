@@ -1,8 +1,8 @@
 import contextlib
 import datetime
 import functools
-import logging
 import io
+import logging
 import pickle
 import re
 import sys
@@ -10,18 +10,18 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
+from typing import Any, Generator, List, Mapping, Type, Generic, TypeVar, cast
+
 import matplotlib.figure
 import numpy
 import pandas
-from typing import Any, Generator, List, Mapping, Type, cast
+from charmonium.determ_hash import determ_hash
 from tqdm import tqdm
 
 from charmonium.freeze import freeze
-from charmonium.determ_hash import determ_hash
 
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
-    lst = lst.copy()
     lst.insert(idx, lst)
     return lst
 
@@ -50,6 +50,7 @@ class WithGetFrozenState:
 def single_dispatch_test(_obj: Any) -> Any:
     return _obj
 
+
 @single_dispatch_test.register
 def _(_obj: int) -> int:
     return _obj
@@ -58,11 +59,14 @@ def _(_obj: int) -> int:
 def function_test(obj: int) -> int:
     return obj
 
+
 def get_class(i: int) -> Type[Any]:
     class A:
         i: int = 0
+
         def foo(self) -> int:
             return self.i
+
     A.i = i
     return A
 
@@ -71,9 +75,11 @@ class ClassWithStaticMethod:
     @staticmethod
     def foo() -> int:
         return 1234
+
     @classmethod
     def bar(cls) -> int:
         return len(cls.__name__)
+
     def baz(self) -> int:
         return 3142 + self.bar()
 
@@ -83,13 +89,23 @@ global1 = 1
 readme_rpb = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb.seek(10)
 
-def generator() -> Generator[int, None, None]:
-    yield from range(10)
 
-generator0 = generator()
-generator1 = generator()
-next(generator1)
-context_manager = contextlib.contextmanager(generator)
+def generator(a) -> Generator[int, None, None]:
+    for i in range(2):
+        yield i
+    yield from range(2)
+    yield a
+
+generator_length = 5
+generators = [
+    generator("hello")
+    for i in range(generator_length)
+]
+generators.append(generator("world"))
+for i, this_generator in enumerate(generators):
+    for _ in range(i):
+        next(this_generator)
+context_manager = contextlib.contextmanager(generator(2))
 
 range10p1 = iter(range(10))
 next(range10p1)
@@ -100,14 +116,15 @@ non_equivalents: Mapping[str, Any] = {
     "bytearray": [bytearray(b"hello"), bytearray(b"world")],
     "tuple": [(), (1, 2)],
     "recursive_list": [
-        insert_recurrence([1, 2, 3, 4], 2),
-        insert_recurrence([1, 2, 3, 5], 2),
+        insert_recurrence([1, 2, 3, 4], 1),
+        insert_recurrence([1, 2, 3, 5], 1),
     ],
     "set": [{1, 2, 3}, {1, 2, 4}],
     "dict of dicts": [dict(a=1, b=2, c=3), dict(a=1, b=2, c=4)],
     "dict with diff order": [{"a": 1, "b": 2}, {"b": 2, "a": 1}],
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
-    "@functools.singledispatch": [single_dispatch_test, determ_hash, freeze],
+    "functools.singledispatch": [single_dispatch_test, determ_hash],
+    # TODO: add freeze to functools.singledispatch
     "function": [cast, tqdm, *dir(tempfile)],
     "unbound methods": [ClassWithStaticMethod.foo, ClassWithStaticMethod.baz],
     "bound methods": [ClassWithStaticMethod.bar, ClassWithStaticMethod().baz],
@@ -117,15 +134,18 @@ non_equivalents: Mapping[str, Any] = {
     "module": [zlib, pickle],
     "range": [range(10), range(20)],
     "iterator": [iter(range(10)), range10p1],
-    # TODO: make freeze work on generators
-    # "generator": [generator0, generator1],
-    "context manager": [context_manager],
+    # TODO: fix generators
+    # "generator": generators,
+    # "context manager": [context_manager],
     "logger": [logging.getLogger("a.b"), logging.getLogger("a.c")],
     "type": [List[int], List[float], ClassWithStaticMethod],
     "class": [WithProperties, WithGetFrozenState],
     "diff classes with same name": [get_class(3), get_class(4)],
     "obj of diff classes with the same name": [get_class(3)(), get_class(4)()],
-    "instance method of diff classes with same name": [get_class(3)().foo, get_class(4)().foo],
+    "instance method of diff classes with same name": [
+        get_class(3)().foo,
+        get_class(4)().foo,
+    ],
     "io.BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"def")],
     "io.StringIO": [io.StringIO("abc"), io.StringIO("def")],
     "io.TextIOWrapper": [open("/tmp/test1", "w"), open("/tmp/test2", "w"), sys.stdout],
@@ -234,3 +254,48 @@ non_freezable_types: Mapping[str, Any] = {
     "io.BufferedReader": open("README.rst", "rb"),
     "io.TextIOBase": open("README.rst", "r"),
 }
+
+
+class A:
+    pass
+
+
+T = TypeVar("T")
+class AChild(A, Generic[T]):
+    pass
+
+class B:
+    # Immutable because of x
+    x = 3
+
+
+class BChild(B):
+    pass
+    # Immutable because inherits B
+
+
+immutables: List[Any] = [
+    (),
+    frozenset(),
+    "hi",
+    b"hi",
+    ((), "hi", frozenset({"hello", "world"})),
+    object,
+    A,
+    AChild,
+    lambda: 314,
+    io,
+    str,
+]
+
+non_immutables: List[Any] = [
+    [],
+    {},
+    set(),
+    ([]),
+    A(),
+    # For now, I am assuming attribute reassignment never happens on classes.
+    # TODO: Remove this assumption
+    # B,
+    # BChild,
+]

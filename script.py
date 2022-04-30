@@ -177,7 +177,10 @@ async def test() -> None:
                 "--namespace-packages",
                 *tests_dir.rglob("*.py"),
             ],
-            env_override={"MYPY_FORCE_COLOR": "1", "PYTHONPATH": "tests:" + os.environ.get("PYTHONPATH", "")},
+            env_override={
+                "MYPY_FORCE_COLOR": "1",
+                "PYTHONPATH": "tests:" + os.environ.get("PYTHONPATH", ""),
+            },
         ),
         pretty_run(
             [

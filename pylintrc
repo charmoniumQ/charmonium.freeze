@@ -482,8 +482,7 @@ known-third-party=enchant
 
 # List of method names used to declare (i.e. assign) instance attributes.
 defining-attr-methods=__init__,
-                      __new__,
-                      setUp
+                      __new__
 
 # List of member names, which should be excluded from the protected access
 # warning.
