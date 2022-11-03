@@ -6,7 +6,18 @@ import re
 import textwrap
 import types
 from pathlib import Path
-from typing import Any, Hashable, Mapping, Optional, Sequence, cast
+from typing import (
+    Any,
+    Dict,
+    Hashable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    cast,
+)
 
 from .util import Ref
 
@@ -120,7 +131,7 @@ class Config:
     # Put ``id(object)`` of objects which do not affect the result computation
     # here, especially those which mutate or are not picklable. Prefer to use
     # ``config.ignore_objects_by_class`` if applicable.
-    ignore_objects_by_id: set[int] = set()
+    ignore_objects_by_id: Set[int] = set()
 
     # Whether to ignore all classes
     ignore_all_classes = False
@@ -149,7 +160,7 @@ class Config:
     # Put ``(function.__module__, function.__name__)`` of functions whose source
     # code and class attributes never change or those changes are not relevant
     # to the resulting computation.
-    ignore_functions: set[tuple[str, str]] = set()
+    ignore_functions: Set[Tuple[str, str]] = set()
 
     ignore_extensions = True
 
@@ -196,12 +207,12 @@ permanent_types = (
     type,
 )
 
-memo: dict[int, Hashable] = {}
+memo: Dict[int, Hashable] = {}
 
 
 def _freeze(
-    obj: Any, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: Any, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     # Check recursion limit
     if config.recursion_limit is not None and depth > config.recursion_limit:
         raise FreezeRecursionError(f"Maximum recursion depth {config.recursion_limit}")
@@ -292,8 +303,8 @@ def _freeze(
 
 @functools.singledispatch
 def freeze_dispatch(
-    obj: Any, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: Any, tabu: dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     raise NotImplementedError
 
 
@@ -311,13 +322,13 @@ def freeze_sequence(
     obj: Sequence[Any],
     obj_is_immutable: bool,
     order_matters: bool,
-    tabu: dict[int, tuple[int, int]],
+    tabu: Dict[int, Tuple[int, int]],
     depth: int,
     index: int,
-) -> tuple[Hashable, bool, Optional[int]]:
+) -> Tuple[Hashable, bool, Optional[int]]:
     all_is_immutable = obj_is_immutable
     all_min_ref = None
-    frozen_elems: list[Any] = [None] * len(obj)
+    frozen_elems: List[Any] = [None] * len(obj)
     for index, elem in enumerate(obj):
         frozen_elem, is_immutable, min_ref = _freeze(elem, tabu, depth, index)
         frozen_elems[index] = frozen_elem
@@ -335,13 +346,13 @@ un_reassignable_types = (type, types.FunctionType, types.ModuleType)
 def freeze_attrs(
     obj: Mapping[str, Any],
     obj_is_immutable: bool,
-    tabu: dict[int, tuple[int, int]],
+    tabu: Dict[int, Tuple[int, int]],
     depth: int,
     index: int,
-) -> tuple[Hashable, bool, Optional[int]]:
+) -> Tuple[Hashable, bool, Optional[int]]:
     all_min_ref = None
     all_is_immutable = obj_is_immutable
-    frozen_items: list[tuple[str, Any]] = [("", None)] * len(obj)
+    frozen_items: List[Tuple[str, Any]] = [("", None)] * len(obj)
     # sorted so we iterate over the members in a consistent order.
     for index, (key, val) in enumerate(sorted(obj.items())):
         logger.debug("%s %s", " " * depth, key)
@@ -355,8 +366,8 @@ def freeze_attrs(
 
 
 def combine_frozen(
-    t0: tuple[Hashable, bool, Optional[int]], t1: tuple[Hashable, bool, Optional[int]]
-) -> tuple[tuple[Hashable, ...], bool, Optional[int]]:
+    t0: Tuple[Hashable, bool, Optional[int]], t1: Tuple[Hashable, bool, Optional[int]]
+) -> Tuple[Tuple[Hashable, ...], bool, Optional[int]]:
     return (
         (t0[0], t1[0]),
         t0[1] and t1[1],

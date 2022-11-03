@@ -1,14 +1,14 @@
 import io
 import sys
-from typing import Hashable, Optional
+from typing import Dict, Hashable, Optional, Tuple
 
 from .lib import UnfreezableTypeError, _freeze, freeze_dispatch
 
 
 @freeze_dispatch.register
 def _(
-    obj: io.TextIOBase, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: io.TextIOBase, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     if hasattr(obj, "buffer"):
         return _freeze(obj.buffer, tabu, depth, index)
     else:
@@ -19,8 +19,8 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.BufferedWriter, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: io.BufferedWriter, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     # If a buffered writers is both pointing to the same file, writing on it has the same side-effect.
     # Otherwise, it has a different side-effect.
     name = getattr(obj, "name", None)
@@ -36,8 +36,8 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.BufferedReader, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: io.BufferedReader, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     raise UnfreezableTypeError(
         f"Cannot freeze readable non-seekable streams such as {obj}. I have no way of knowing your position in the stream without modifying it."
     )
@@ -45,8 +45,8 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.BufferedRandom, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: io.BufferedRandom, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     name = getattr(obj, "name", None)
     if name is not None:
         cursor = obj.tell()
@@ -64,8 +64,8 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.FileIO, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: io.FileIO, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     if obj.fileno() == sys.stderr.fileno():
         return "<stderr>", True, None
     elif obj.fileno() == sys.stdout.fileno():

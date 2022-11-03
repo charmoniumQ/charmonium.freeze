@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import io
 import logging
 import re
 import types
-from typing import Any, Hashable, Optional
+from typing import Any, Dict, Hashable, Optional, Tuple
 
 from .lib import _freeze, config, freeze_attrs, freeze_dispatch, freeze_sequence, logger
 
@@ -15,8 +17,8 @@ from .lib import _freeze, config, freeze_attrs, freeze_dispatch, freeze_sequence
 @freeze_dispatch.register(complex)
 @freeze_dispatch.register(type(...))
 def _(
-    obj: Any, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: Any, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     # We must exclude obj if it occurs in the forbidden class, even though it is a subclass of a simple type.
     type_pair = (obj.__class__.__module__, obj.__class__.__name__)
     if type_pair in config.ignore_objects_by_class:
@@ -29,46 +31,46 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: bytearray, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: bytearray, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return bytes(obj), False, None
 
 
 @freeze_dispatch.register(set)
 def _(
-    obj: set[Any], tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: set[Any], tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_sequence(obj, False, False, tabu, depth, 0)
 
 
 @freeze_dispatch.register(frozenset)
 def _(
-    obj: frozenset[Any], tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: frozenset[Any], tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_sequence(obj, True, False, tabu, depth, 0)
 
 
 @freeze_dispatch.register(list)
 def _(
-    obj: list[Any], tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: list[Any], tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_sequence(obj, False, True, tabu, depth, 0)
 
 
 @freeze_dispatch.register(tuple)
 def _(
-    obj: tuple[Any], tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: Tuple[Any], tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_sequence(obj, True, True, tabu, depth, 0)
 
 
 @freeze_dispatch.register(types.MappingProxyType)
 def _(
     obj: types.MappingProxyType[Hashable, Any],
-    tabu: dict[int, tuple[int, int]],
+    tabu: Dict[int, Tuple[int, int]],
     depth: int,
     index: int,
-) -> tuple[Hashable, bool, Optional[int]]:
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_sequence(
         obj.items(), True, not config.ignore_dict_order, tabu, depth, 0
     )
@@ -76,8 +78,8 @@ def _(
 
 @freeze_dispatch.register(dict)
 def _(
-    obj: dict[Hashable, Any], tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: Dict[Hashable, Any], tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_sequence(
         obj.items(), False, not config.ignore_dict_order, tabu, depth, 0
     )
@@ -85,8 +87,8 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: types.ModuleType, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: types.ModuleType, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     if config.ignore_extensions and not getattr(obj, "__module__", None):
         return obj.__name__, True, None
     attrs = {
@@ -101,15 +103,15 @@ def _(
 # pylint: disable=unused-argument
 @freeze_dispatch.register
 def _(
-    obj: memoryview, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: memoryview, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return obj.tobytes(), False, None
 
 
 @freeze_dispatch.register
 def _(
-    obj: logging.Logger, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: logging.Logger, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     # The client should be able to change the logger without changing the computation.
     # But the _name_ of the logger specifies where the side-effect goes, so it should matter.
     return obj.name, True, None
@@ -117,20 +119,20 @@ def _(
 
 @freeze_dispatch.register(re.Match)
 def _(
-    obj: re.Match[str], tabu: set[int], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: re.Match[str], tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return (obj.regs, _freeze(obj.re, tabu, depth, 0)[0], obj.string), True, None
 
 
 @freeze_dispatch.register
 def _(
-    obj: io.BytesIO, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: io.BytesIO, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return obj.getvalue(), False, None
 
 
 @freeze_dispatch.register
 def _(
-    obj: io.StringIO, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: io.StringIO, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return obj.getvalue(), False, None

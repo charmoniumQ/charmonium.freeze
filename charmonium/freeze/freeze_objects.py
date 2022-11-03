@@ -1,5 +1,5 @@
 import copyreg
-from typing import Any, Callable, Hashable, Mapping, Optional, cast
+from typing import Any, Callable, Dict, Hashable, Mapping, Optional, Tuple, cast
 
 from .lib import (
     UnfreezableTypeError,
@@ -18,8 +18,8 @@ dispatch_table = cast(
 
 
 def freeze_pickle(
-    obj: Any, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> Optional[tuple[Hashable, bool, Optional[int]]]:
+    obj: Any, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Optional[Tuple[Hashable, bool, Optional[int]]]:
     reduce_ex_method = getattr(obj, "__reduce_ex__", None)
     reduce_method = getattr(obj, "__reduce__", None)
     if type(obj) in dispatch_table:
@@ -34,7 +34,7 @@ def freeze_pickle(
     if isinstance(reduced, str):
         return ((b"pickle", reduced), True, None)
     elif isinstance(reduced, tuple) and 2 <= len(reduced) <= 5:
-        ret: tuple[Hashable, bool, Optional[int]]
+        ret: Tuple[Hashable, bool, Optional[int]]
         if reduced[0] == copyreg.__newobj__:  # type: ignore
             ret = (b"__newobj__", True, None)
         else:
@@ -87,8 +87,8 @@ def freeze_pickle(
 
 @freeze_dispatch.register
 def _(
-    obj: object, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: object, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     # getfrozenstate is custom-built for charmonium.freeze
     # It should take precedence.
     getfrozenstate = getattr(obj, "__getfrozenstate__", None)

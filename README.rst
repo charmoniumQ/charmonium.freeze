@@ -187,7 +187,7 @@ Special cases
     ``__getfrozenstate__`` method, you can still register `single dispatch
     handler`_ for that type:
 
-    >>> from typing import Hashable, Optional
+    >>> from typing import Hashable, Optional, Dict, Tuple
     >>> from charmonium.freeze import freeze, _freeze_dispatch, _freeze
     >>> class Test:
     ...     deterministic_val = 3
@@ -196,10 +196,10 @@ Special cases
     >>> @_freeze_dispatch.register(Test)
     ... def _(
     ...         obj: Test,
-    ...         tabu: set[int],
+    ...         tabu: Dict[int, Tuple[int, int]],
     ...         level: int,
     ...         index: int,
-    ...     ) -> tuple[Hashable, bool, Optional[int]]:
+    ...     ) -> Tuple[Hashable, bool, Optional[int]]:
     ...     # Type annotations are optional.
     ...     # I have included them here for clarity.
     ... 

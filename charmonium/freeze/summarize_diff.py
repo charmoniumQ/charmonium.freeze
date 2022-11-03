@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import pprint
-from typing import Any, Hashable, Iterable, TypeVar, cast
+from typing import Any, FrozenSet, Hashable, Iterable, Tuple, TypeVar, cast
 
 from .lib import freeze
 from .util import common_prefix
@@ -128,8 +128,8 @@ def iterate_diffs_of_frozen(
         # could be dict
         if is_frozen_dict(obj0.tail) and is_frozen_dict(obj1.tail):
             # treat as dict
-            obj0.tail = dict(cast(frozenset[tuple[Hashable, Any]], obj0.tail))
-            obj1.tail = dict(cast(frozenset[tuple[Hashable, Any]], obj1.tail))
+            obj0.tail = dict(cast(FrozenSet[Tuple[Hashable, Any]], obj0.tail))
+            obj1.tail = dict(cast(FrozenSet[Tuple[Hashable, Any]], obj1.tail))
             yield from iterate_diffs_of_frozen(obj0, obj1)
         else:
             # treat frozenset as a pure frozenset

@@ -1,6 +1,6 @@
 import types
 from pathlib import Path
-from typing import Hashable, Optional
+from typing import Dict, Hashable, Optional, Tuple
 
 from . import util
 from .lib import (
@@ -16,10 +16,10 @@ from .lib import (
 @freeze_dispatch.register
 def _(
     obj: types.FunctionType,
-    tabu: dict[int, tuple[int, int]],
+    tabu: Dict[int, Tuple[int, int]],
     depth: int,
     index: int,
-) -> tuple[Hashable, bool, Optional[int]]:
+) -> Tuple[Hashable, bool, Optional[int]]:
     type_pair = (obj.__module__, obj.__name__)
     if type_pair in config.ignore_functions:
         logger.debug("%s ignoring %s", " " * depth, type_pair)
@@ -47,14 +47,14 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: types.CodeType, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: types.CodeType, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_code(obj, tabu, depth, index)
 
 
 def freeze_code(
-    obj: types.CodeType, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: types.CodeType, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     source_loc = Path(obj.co_filename)
     if config.ignore_all_code or any(
         util.is_relative_to(source_loc, constant_file)
@@ -75,14 +75,14 @@ def freeze_code(
 
 @freeze_dispatch.register
 def _(
-    obj: types.FrameType, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: types.FrameType, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_frame(obj, tabu, depth, index)
 
 
 def freeze_frame(
-    obj: types.FrameType, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: types.FrameType, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     ret = combine_frozen(
         freeze_code(obj.f_code, tabu, depth, 0),
         freeze_attrs(obj.f_locals, True, tabu, depth, 1),
@@ -93,15 +93,15 @@ def freeze_frame(
 @freeze_dispatch.register
 def _(
     obj: types.BuiltinFunctionType,
-    tabu: dict[int, tuple[int, int]],
+    tabu: Dict[int, Tuple[int, int]],
     depth: int,
     index: int,
-) -> tuple[Hashable, bool, Optional[int]]:
+) -> Tuple[Hashable, bool, Optional[int]]:
     return ("builtin func", obj.__name__), True, None
 
 
 @freeze_dispatch.register
 def _(
-    obj: types.GeneratorType, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool, Optional[int]]:
+    obj: types.GeneratorType, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_frame(obj.gi_frame, tabu, depth, 0)

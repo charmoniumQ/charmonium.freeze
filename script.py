@@ -240,7 +240,7 @@ async def per_env_tests() -> None:
             ],
             env_override={"MYPY_FORCE_COLOR": "1"},
         ),
-        pytest(use_coverage=True, show_slow=False),
+        pytest(use_coverage=False, show_slow=False),
     )
 
 
