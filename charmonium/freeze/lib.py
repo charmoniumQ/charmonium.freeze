@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import collections
 import copyreg
 import functools
 import logging
+import re
 import textwrap
-
+import types
 from pathlib import Path
-from typing import Any, Callable, Hashable, Mapping, Optional, cast
+from typing import Any, Callable, Hashable, Mapping, Optional, Sequence, cast
 
 from .util import Ref, getclosurevars, is_relative_to
 
@@ -39,6 +41,13 @@ class Config:
         ("threading", "_limbo"),
         ("re", "_cache"),
         ("charmonium.freeze.lib", "memo"),
+        ("sys", "modules"),
+        ("sys", "path"),
+        ("linecache", "cache"),
+        ("inspect", "_filesbymodname"),
+        ("inspect", "modulesbyfile"),
+        ("sre_compile", "compile"),
+        ("os", "environ"),
     }
 
     # Put ``(function.__module__, function.__name__, nonlocal_name)`` of
@@ -53,7 +62,6 @@ class Config:
         # computation.
         ("functools", "dispatch", "cache_token"),
         ("functools", "dispatch", "dispatch_cache"),
-        ("functools", "dispatch", "registry"),
     }
 
     # Put paths to source code that whose source code never changes or those
@@ -68,10 +76,6 @@ class Config:
     # you import it as. Use ``object.__module__`` to be sure.
     ignore_attributes: set[tuple[str, str, str]] = {
         ("pandas.core.internals.blocks", "Block", "_cache"),
-
-        # There is some non-determinism in the order of the elements in this dict.
-        # Not sure why.
-        ("re", "RegexFlag", "_value2member_map_"),
     }
 
     # Put ``(object.__module__, object.__class__.__name__)`` of objects which do
@@ -99,16 +103,17 @@ class Config:
         ("weakref", "ProxyType"),
         ("weakref", "CallableProxyType"),
         ("_weakrefset", "WeakSet"),
-
-        # see https://github.com/python/cpython/issues/92049
-        ("sre_constants", "_NamedIntConstant"),
-
-        # TODO: Remove these when we have caching
-        # They are purely performance (not correctness)
         ("threading", "Thread"),
         ("threading", "Event"),
         ("threading", "_DummyThread"),
         ("threading", "Condition"),
+        ("typing", "Generic"),
+        ("re", "RegexFlag"),
+        # see https://github.com/python/cpython/issues/92049
+        ("sre_constants", "_NamedIntConstant"),
+        # TODO: Remove these when we have caching
+        # They are purely performance (not correctness)
+        ("pandas.core.dtypes.base", "Registry"),
     }
 
     # Put ``id(object)`` of objects which do not affect the result computation
@@ -120,25 +125,20 @@ class Config:
     # and class attributes never change or those changes do not affect the
     # result computation.
     ignore_classes: set[tuple[str, Optional[str]]] = {
-        # TODO: Remove these when we have caching
+        # TODO[research]: Remove these when we have caching
         # They are purely performance (not correctness)
         ("builtins", None),
         ("ABC", None),
         ("ABCMeta", None),
         ("_operator", None),
-        ("typing", "Generic"),
-        ("threading", "Event"),
-        ("threading", "Condition"),
-        ("threading", "RLock"),
-        ("threading", "Thread"),
-        ("logging", "Logger"),
+        ("numpy", "ndarray"),
         ("pandas.core.frame", "DataFrame"),
-        ("pandas.core.internals.managers", "BlockManager"),
-        ("pandas.core.indexes.range", "RangeIndex"),
+        ("pandas.core.series", "Series"),
         ("pandas.core.indexes.base", "Index"),
-        ("pandas.core.indexes.numeric", "Int64Index"),
-        ("matplotlib.figunre", "Figure"),
+        ("matplotlib.figure", "Figure"),
         ("tqdm.std", "tqdm"),
+        ("re", "RegexFlag"),
+        ("typing", "Generic"),
     }
 
     # Put ``(function.__module__, function.__name__)`` of functions whose source
@@ -163,7 +163,7 @@ def freeze(obj: Any) -> Hashable:
     return ret
 
 
-simple_types = (
+printable_types = (
     type(None),
     bytes,
     str,
@@ -174,149 +174,179 @@ simple_types = (
     memoryview,
 )
 
+untabuable_types = (
+    type(None),
+    int,
+    float,
+    complex,
+    type(...),
+)
+
+permanent_types = (
+    types.ModuleType,
+    types.FunctionType,
+    types.CodeType,
+    type,
+)
 
 memo: dict[int, Hashable] = {}
 
 
 def _freeze(
     obj: Any, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool]:
+) -> tuple[Hashable, bool, Optional[int]]:
+    # Check recursion limit
     if config.recursion_limit is not None and depth > config.recursion_limit:
         raise FreezeRecursionError(f"Maximum recursion depth {config.recursion_limit}")
 
+    # Write log
+    indent = depth * " "
     if logger.isEnabledFor(logging.DEBUG):
-        if isinstance(obj, simple_types):
+        if isinstance(obj, printable_types):
             logger.debug(
                 "%s %s",
-                depth * " ",
+                indent,
                 textwrap.shorten(repr(obj), width=config.log_width),
             )
         else:
+            target = freeze_dispatch.dispatch(type(obj))
             logger.debug(
                 "%s %s %s",
-                depth * " ",
+                indent,
                 type(obj).__name__,
                 textwrap.shorten(repr(obj), width=config.log_width),
             )
 
-    cached_result = memo.get(id(obj))
+    # Check objects ignore by id
     if id(obj) in config.ignore_objects_by_id:
-        return b"ignored by id", True
-    if cached_result:
-        return cached_result, True
-    else:
-        result = tabu.get(id(obj))
-        if result:
-            return (b"cycle", result), True
-        else:
-            if not isinstance(obj, simple_types):
-                tabu[id(obj)] = (depth, index)
-            ret, is_immutable = freeze_dispatch(obj, tabu, depth + 1, 0)
-            if not isinstance(obj, simple_types):
-                # del tabu[id(obj)]
-                if is_immutable:
-                    memo[id(obj)] = ret
-                    # TODO: Don't put ret in the cache if ret contains a cycle which refers to a depth less than this frame.
-            return ret, is_immutable
+        logger.debug("%s ignoring object because of id %d", indent, id(obj))
+        return b"ignored by id", True, None
 
+    # Check objects ignore by class
+    type_pair = (obj.__class__.__module__, obj.__class__.__name__)
+    if type_pair in config.ignore_objects_by_class:
+        logger.debug("%s ignoring object because of class %s", " " * depth, type_pair)
+        return type_pair, True, None
 
-def immutable_if_children_are(
-    freeze_ret: tuple[Hashable, bool], is_immutable: Ref[bool]
-) -> Hashable:
-    if not freeze_ret[1]:
-        is_immutable(False)
-    return freeze_ret[0]
+    # Check memo
+    if id(obj) in memo:
+        logger.debug("%s memo hit for %d", indent, id(obj))
+        cached_result = memo[id(obj)]
+        return cached_result, True, None
+
+    # Check tabu
+    if id(obj) in tabu:
+        depth2, index2 = tabu[id(obj)]
+        obj_str = re.sub("0x[a-f0-9]*", "", str(obj))
+        logger.debug(
+            "%s tabu hit for %d: %d %d %s",
+            indent,
+            id(obj),
+            depth - depth2,
+            index2,
+            obj_str,
+        )
+        return (
+            (
+                b"cycle",
+                obj_str,
+                depth - depth2,
+            ),
+            True,
+            None,
+        )
+
+    # Ok, no more tricks; actually do the work.
+    if not isinstance(obj, untabuable_types):
+        tabu[id(obj)] = (depth, index)
+    ret, is_immutable, ref_depth = freeze_dispatch(obj, tabu, depth + 1, 0)
+    if not isinstance(obj, untabuable_types):
+        del tabu[id(obj)]
+
+    # TODO: Look at ref_depth here.
+    # Suppose obj1 -> obj2, obj2 -> obj1 and obj1prime -> obj2.
+    # freeze(obj1)      = [("data", obj1     .data), ("children", [("data", obj2.data, ("children", [("cycle", 1, 0)]))])]
+    # freeze(obj2)      = [("data", obj1     .data), ("children", [("data", obj2.data, ("children", [("cycle", 1, 0)]))])]
+    # freeze(obj1prime) = [("data", obj1prime.data), ("children", [("data", obj2.data, ("children", [("cycle", 1, 0)]))])]
+    # Note that freeze(obj2) is invoked by freeze(obj1), and freeze(obj1) is cached.
+    # Suppose the program evolves and
+    # Suppose obj1 -> obj2, obj2 -> obj1prime and obj1prime -> obj2.
+    # obj2 should have a different hash, but if we call `freeze(obj1prime)` first, none of the hashes change.
+
+    if is_immutable and isinstance(obj, permanent_types):
+        memo[id(obj)] = ret
+    return ret, is_immutable, ref_depth
 
 
 @functools.singledispatch
 def freeze_dispatch(
     obj: Any, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool]:
-    type_pair = (obj.__class__.__module__, obj.__class__.__name__)
-    if type_pair in config.ignore_objects_by_class:
-        logger.debug("%s ignoring %s", " " * depth, type_pair)
-        return type_pair, True
-
-    getfrozenstate = getattr(obj, "__getfrozenstate__", None)
-    if hasattr(obj, "__getfrozenstate__"):
-        # getfrozenstate is custom-built for charmonium.freeze
-        # It should take precedence.
-        is_immutable = Ref(True)
-        ret = (
-            immutable_if_children_are(
-                _freeze(type(obj), tabu, depth, index + 0), is_immutable
-            ),
-            immutable_if_children_are(
-                _freeze(getfrozenstate(), tabu, depth, index + 0), is_immutable
-            ),
-        )
-        return ret, is_immutable()
-
-    pickle_data = freeze_pickle(obj, tabu, depth, index)
-    # Otherwise, we may be able to use the Pickle protocol.
-    if pickle_data:
-        return pickle_data
-
-    # Otherwise, give up.
-    raise UnfreezableTypeError("not implemented")
+) -> tuple[Hashable, bool, Optional[int]]:
+    raise NotImplementedError
 
 
-def freeze_pickle(
-    obj: Any, tabu: dict[int, tuple[int, int]], depth: int, index: int
-) -> tuple[Hashable, bool]:
-    dispatch_table = cast(
-        Mapping[type, Callable[[Any], Any]],
-        copyreg.dispatch_table,  # type: ignore
+def min_with_none_inf(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    """min of x and y, where None represents positive infinity."""
+    if x is None:
+        return y
+    elif y is None:
+        return x
+    else:
+        return min(x, y)
+
+
+def freeze_sequence(
+    obj: Sequence[Any],
+    obj_is_immutable: bool,
+    order_matters: bool,
+    tabu: dict[int, tuple[int, int]],
+    depth: int,
+    index: int,
+) -> tuple[Hashable, bool, Optional[int]]:
+    all_is_immutable = obj_is_immutable
+    all_min_ref = None
+    frozen_elems: list[Any] = [None] * len(obj)
+    for index, elem in enumerate(obj):
+        frozen_elem, is_immutable, min_ref = _freeze(elem, tabu, depth, index)
+        frozen_elems[index] = frozen_elem
+        all_is_immutable = all_is_immutable and is_immutable
+        all_min_ref = min_with_none_inf(all_min_ref, min_ref)
+    ret = cast(
+        Hashable, tuple(frozen_elems) if order_matters else frozenset(frozen_elems)
     )
-    if type(obj) in dispatch_table:
-        reduced = dispatch_table[type(obj)](obj)
-    else:
-        reducer = getattr(obj, "__reduce_ex__", None)
-        if reducer:
-            reduced = reducer(4)
-        else:
-            reducer = getattr(obj, "__reduce__", None)
-            if reducer:
-                reduced = reducer()
-            else:
-                return None, True
+    return ret, all_is_immutable, all_min_ref
 
-    data: list[Hashable] = []
-    if isinstance(reduced, str):
-        data.append(reduced)
-    elif isinstance(reduced, tuple) and 2 <= len(reduced) <= 5:
-        constructor = _freeze(reduced[0], tabu, depth, index)[0]
-        args = tuple(_freeze(arg, tabu, depth, index)[0] for arg in reduced[1])
-        data.append((constructor, *args))
-        # reduced may only have two items, or the third one may be None or empty containers.
-        if len(reduced) > 2 and reduced[2]:
-            state: Hashable
-            if isinstance(reduced[2], dict):
-                state = tuple(
-                    sorted(
-                        (
-                            # TODO: Don't freeze var; it's already a string
-                            _freeze(var, tabu, depth*2+0, index)[0],
-                            _freeze(val, tabu, depth*2+1, index)[0],
-                        )
-                        for var, val in reduced[2].items()
-                        if (obj.__module__, obj.__class__.__name__, var)
-                        not in config.ignore_attributes
-                    )
-                )
-            else:
-                state = _freeze(reduced[2], tabu, depth, index)[0]
-            if state:
-                data.append(state)
-        if len(reduced) > 3 and reduced[3]:
-            list_items = _freeze(list(reduced[3]), tabu, depth, index)[0]
-            if list_items:
-                data.append(list_items)
-        if len(reduced) > 4 and reduced[4]:
-            dict_items = _freeze(dict(reduced[4]), tabu, depth, index)[0]
-            if dict_items:
-                data.append(dict_items)
-    else:
-        return None, True
 
-    return (b"pickle", *data), False
+un_reassignable_types = (type, types.FunctionType, types.ModuleType)
+
+
+def freeze_attrs(
+    obj: Mapping[str, Any],
+    obj_is_immutable: bool,
+    tabu: dict[int, tuple[int, int]],
+    depth: int,
+    index: int,
+) -> tuple[Hashable, bool, Optional[int]]:
+    all_min_ref = None
+    all_is_immutable = obj_is_immutable
+    frozen_items: list[tuple[str, Any]] = [("", None)] * len(obj)
+    # sorted so we iterate over the members in a consistent order.
+    for index, (key, val) in enumerate(sorted(obj.items())):
+        logger.debug("%s %s", " " * depth, key)
+        frozen_val, _, min_ref = _freeze(val, tabu, depth, index)
+        frozen_items[index] = (key, frozen_val)
+        is_immutable = isinstance(val, un_reassignable_types)
+        if min_ref is not None:
+            all_min_ref = min_with_none_inf(min_ref, all_min_ref)
+        all_is_immutable = all_is_immutable and is_immutable
+    return tuple(frozen_items), all_is_immutable, all_min_ref
+
+
+def combine_frozen(
+    t0: tuple[Hashable, bool, Optional[int]], t1: tuple[Hashable, bool, Optional[int]]
+) -> tuple[tuple[Hashable, ...], bool, Optional[int]]:
+    return (
+        (t0[0], t1[0]),
+        t0[1] and t1[1],
+        min_with_none_inf(t0[2], t1[2]),
+    )

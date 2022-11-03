@@ -58,10 +58,10 @@ assert get_line_lengths(test) == test_result, get_line_lengths(test)
 if __name__ == "__main__":
     """
     # Run tests
-    pytest --exitfirst > log
+    pytest --numprocesses=0 --exitfirst --failed-first tests > log
 
-    # Trim pytest output
-    cut --bytes=38- log > tmp
+    # Trim pytest log lines
+    sed -n 's/^[A-Z][A-Z]*  *[A-Za-z0-9\.:_]*\(.*\)$/\1/p' log > tmp
 
     # Annotate log with descendent counts
     python utils/annotate_logs.py < tmp > log2
@@ -73,7 +73,9 @@ if __name__ == "__main__":
     sort --numeric --reverse | head --lines 30
 
     # all in one:
-    pytest --exitfirst > log || (cut --bytes=38- log | python utils/annotate_logs.py > log2 && cut --field=1 --delimiter=' ' log2 | sort --numeric --reverse | head --lines 30)"""
+    pytest --numprocesses=0 --exitfirst --failed-first tests > log || (sed -n 's/^[A-Z][A-Z]*  *[A-Za-z0-9\.:_]*\(.*\)$/\1/p' log | python utils/annotate_logs.py > log2 && cut --field=1 --delimiter=' ' log2 | sort --numeric --reverse | head --lines 30)
+
+    """
     lines = list(sys.stdin)
     ignore_prefix = int(dict(enumerate(sys.argv)).get(1, 0))
     line_lengths = get_line_lengths(lines, ignore_prefix)

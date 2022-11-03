@@ -1,13 +1,13 @@
-from pprint import pprint
 import base64
 import copy
-import textwrap
 import itertools
 import logging
 import os
 import pickle
+import pprint
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 from typing import (
     IO,
@@ -51,19 +51,29 @@ def print_inequality_in_hashables(
             print("x ^ y == ", x ^ y, "at obj" + "".join(stack), file=file)
     else:
         if x != y:
-            print(x, "!=", y, "at obj" + "".join(stack), file=file)
+            print(
+                textwrap.shorten(repr(x), 70),
+                "!=",
+                textwrap.shorten(repr(y), 70),
+                "at obj" + "".join(stack),
+                file=file,
+            )
 
 
-def test_immmutables(caplog: pytest.LogCaptureFixture) -> None:
+def test_immmutability(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
-    for immutable in immutables:
-        assert _freeze(immutable, {}, 0, 0)[1], _freeze(immutable, {}, 0, 0)
-
-
-def test_non_immmutables(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
-    for non_immutable in non_immutables:
-        assert not _freeze(non_immutable, {}, 0, 0)[1], _freeze(non_immutable, {}, 0, 0)
+    for obj in immutables:
+        frozen = _freeze(obj, {}, 0, 0)
+        if not frozen[1]:
+            pprint.pprint(obj, width=1000)
+            pprint.pprint(frozen, width=1000)
+        assert frozen[1]
+    for obj in non_immutables:
+        frozen = _freeze(obj, {}, 0, 0)
+        if frozen[1]:
+            pprint.pprint(obj, width=1000)
+            pprint.pprint(frozen, width=1000)
+        assert not frozen[1]
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
@@ -71,8 +81,13 @@ def test_freeze_works(caplog: pytest.LogCaptureFixture, input_kind: str) -> None
     caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
     for value in non_equivalents[input_kind]:
         frozen = freeze(value)
-        hash(frozen)
-        determ_hash(frozen)
+        try:
+            hash(frozen)
+            determ_hash(frozen)
+        except Exception as exc:
+            pprint.pprint(value, width=1000)
+            pprint.pprint(frozen, width=1000)
+            raise exc
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
@@ -86,9 +101,8 @@ def test_freeze_total_uniqueness(
         for j, (that_value, that_freeze) in enumerate(frozen_values):
             if i != j:
                 if this_freeze == that_freeze:
-                    print(i, j)
-                    pprint(this_freeze)
-                    pprint(that_freeze)
+                    print(f"freeze({this_value!r}) = {pprint.pformat(this_freeze)}")
+                    print(f"freeze({that_value!r}) = {pprint.pformat(that_freeze)}")
                 assert this_freeze != that_freeze
 
 
@@ -106,8 +120,8 @@ def test_determinism_over_copies(
         freeze1 = freeze(value)
         if freeze0 != freeze1:
             print_inequality_in_hashables(freeze0, freeze1)
-            pprint(freeze0)
-            pprint(freeze1)
+            print(pprint.pformat(freeze0, width=1000))
+            print(pprint.pformat(freeze1, width=1000))
         assert freeze0 == freeze1
 
 
@@ -152,8 +166,8 @@ def test_determinism_over_processes(
         new_hash = freeze(value)
         if past_hash != new_hash:
             print_inequality_in_hashables(past_hash, new_hash)
-            pprint(past_hash)
-            pprint(new_hash)
+            pprint.pprint(past_hash, width=1000)
+            pprint.pprint(new_hash, width=1000)
         assert past_hash == new_hash, f"Determinism-over-processes failed for {value}"
 
 

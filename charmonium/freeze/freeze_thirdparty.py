@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 import io
-from typing import Any, Hashable
+import pickle
+from typing import Any, Hashable, Optional
 
-from .lib import (
-    UnfreezableTypeError,
-    _freeze,
-    config,
-    freeze_dispatch,
-    immutable_if_children_are,
-)
-
+from .lib import UnfreezableTypeError, _freeze, config, freeze_dispatch
 
 try:
     import numpy
@@ -18,11 +12,15 @@ except ImportError:
     pass
 else:
 
-    @freeze_dispatch.register
+    @freeze_dispatch.register(numpy.ndarray)
     def _(
-        obj: numpy.ndarray, tabu: dict[int, tuple[int, int]], depth: int, index: int
-    ) -> tuple[Hashable, bool]:
-        return ("numpy.ndarray", obj.tobytes(), str(obj.dtype)), False
+        obj: numpy.typing.NDArray[Any],
+        tabu: dict[int, tuple[int, int]],
+        depth: int,
+        index: int,
+    ) -> tuple[Hashable, bool, Optional[int]]:
+        return ("numpy.ndarray", obj.tobytes(), str(obj.dtype)), False, None
+
 
 # TODO: use config.ignore_attributes instead.
 try:
@@ -34,9 +32,9 @@ else:
     @freeze_dispatch.register(tqdm.tqdm)
     def _(
         obj: tqdm.tqdm[Any], tabu: dict[int, tuple[int, int]], depth: int, index: int
-    ) -> tuple[Hashable, bool]:
+    ) -> tuple[Hashable, bool, Optional[int]]:
         # Unfortunately, the tqdm object contains the timestamp of the last ping, which would result in a different state every time.
-        return _freeze(obj.iterable, tabu, depth, index)[0], False
+        return _freeze(obj.iterable, tabu, depth, index)
 
 
 try:
@@ -51,13 +49,32 @@ else:
         tabu: dict[int, tuple[int, int]],
         depth: int,
         index: int,
-    ) -> tuple[Hashable, bool]:
+    ) -> tuple[Hashable, bool, Optional[int]]:
         file = io.BytesIO()
         obj.savefig(file, format="raw")
-        return file.getvalue(), False
+        return file.getvalue(), False, None
 
 
-# TODO: use config.ignore_attributes instead.
+try:
+    import pandas
+except ImportError:
+    pass
+else:
+
+    @freeze_dispatch.register(pandas.DataFrame)
+    @freeze_dispatch.register(pandas.Series)  # type: ignore
+    @freeze_dispatch.register(pandas.Index)  # type: ignore
+    def _(
+        obj: Any,
+        tabu: dict[int, tuple[int, int]],
+        depth: int,
+        index: int,
+    ) -> tuple[Hashable, bool, Optional[int]]:
+        return pickle.dumps(obj), True, None
+
+
+# TODO: See if we can support this anyway.
+# If not, use config.ignore attributes instead.
 try:
     import pymc3  # noqa: autoimport
 except ImportError:
@@ -67,7 +84,7 @@ else:
     @freeze_dispatch.register
     def _(
         obj: pymc3.Model, tabu: dict[int, tuple[int, int]], depth: int, index: int
-    ) -> tuple[Hashable, bool]:
+    ) -> tuple[Hashable, bool, Optional[int]]:
         raise UnfreezableTypeError(
             "pymc3.Model has been known to cause problems due to its not able to be pickled."
         )

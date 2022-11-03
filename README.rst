@@ -73,18 +73,16 @@ deterministically, injectively maps objects to hashable objects.
 Have you ever felt like you wanted to "freeze" a list of arbitrary
 data into a hashable value? Now you can.
 
->>> import pytest; pytest.xfail()
 >>> obj = [1, 2, 3, {4, 5, 6}, object()]
 >>> hash(obj)
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
 TypeError: unhashable type: 'list'
 
->>> import pytest; pytest.xfail()
 >>> from charmonium.freeze import freeze
 >>> from pprint import pprint
 >>> freeze(obj)
-(1, 2, 3, frozenset({4, 5, 6}), (('args', ('object',)),))
+(1, 2, 3, frozenset({4, 5, 6}), (b'pickle', b'__newobj__', ((b'class', 'builtins.object'),)))
 
 If you want to actually boil this down into a single integer, see
 |charmonium.determ_hash|_. This library's job is just to freeze the
@@ -95,53 +93,54 @@ state.
 
 It even works on custom types.
 
->>> import pytest; pytest.xfail()
 >>> # Make a custom type
 >>> class Struct:
 ...     def frobnicate(self):
 ...         print(123)
 >>> s = Struct()
 >>> s.attr = 4
->>> freeze(s)
-(('args', (('Struct', (('__doc__', None), ('frobnicate', ...))),)), ('state', (('attr', 4),)))
+>>> pprint(freeze(s))
+(b'pickle',
+ (b'__newobj__',
+  (((b'class',
+     'Struct',
+     (('frobnicate',
+       (b'function',
+        b'code',
+        'frobnicate',
+        b't\x00d\x01\x83\x01\x01\x00d\x00S\x00',
+        (None, 123))),)),
+    (b'class', 'builtins.object')),)),
+ (('attr', 4),))
 
 And methods, functions, lambdas, etc.
 
->>> import pytest; pytest.xfail()
 >>> pprint(freeze(lambda x: x + 123))
-(('code',
-  (('name', '<lambda>'),
-   ('varnames', ('x',)),
-   ('constants', (None, 123)),
-   ('bytecode', b'|\x00d\x01\x17\x00S\x00'))),)
->>> import pytest; pytest.xfail()
+(b'function', b'code', '<lambda>', b'|\x00d\x01\x17\x00S\x00', (None, 123))
 >>> import functools
 >>> pprint(freeze(functools.partial(print, 123)))
-(('constructor',
-  ('partial',
-   ...)),
- ('args', ('print',)),
- ('state', ('print', (123,), (), None)))
->>> import pytest; pytest.xfail()
+(b'pickle',
+ (((b'class',
+    'partial',
+    ...),
+   (b'class', 'builtins.object')),
+  (('builtin func', 'print'),)),
+ (('builtin func', 'print'), (123,), (), None))
 >>> pprint(freeze(Struct.frobnicate))
-(('code',
-  (('name', 'frobnicate'),
-   ('varnames', ('self',)),
-   ('constants', (None, 123)),
-   ('bytecode', b't\x00d\x01\x83\x01\x01\x00d\x00S\x00'))),)
->>> import pytest; pytest.xfail()
+(b'function',
+ b'code',
+ 'frobnicate',
+ b't\x00d\x01\x83\x01\x01\x00d\x00S\x00',
+ (None, 123))
 >>> i = 0
 >>> def square_plus_i(x):
 ...     # Value of global variable will be included in the function's frozen state.
 ...     return x**2 + i
 ... 
 >>> pprint(freeze(square_plus_i))
-(('code',
-  (('name', 'square_plus_i'),
-   ('varnames', ('x',)),
-   ('constants', (None, 2)),
-   ('bytecode', b'|\x00d\x01\x13\x00t\x00\x17\x00S\x00'))),
- ('closure globals', (('i', 0),)))
+(b'function',
+ (b'code', 'square_plus_i', b'|\x00d\x01\x13\x00t\x00\x17\x00S\x00', (None, 2)),
+ (('i', 0),))
 
 If the source code of ``square_plus_i`` changes between successive invocations,
 then the ``freeze`` value will change. This is useful for caching unchanged
@@ -169,13 +168,14 @@ Special cases
     ``__getfrozenstate__`` which returns a deterministic snapshot of the
     state. This takes precedence over the Pickle protocol, if it is defined.
 
-    >>> import pytest; pytest.xfail()
     >>> class Struct:
     ...     pass
     >>> s = Struct()
     >>> s.attr = 4
     >>> pprint(freeze(s))
-    (('args', (('Struct', (('__doc__', None),)),)), ('state', (('attr', 4),)))
+    (b'pickle',
+     (b'__newobj__', (((b'class', 'Struct', ()), (b'class', 'builtins.object')),)),
+     (('attr', 4),))
     >>> # which is based on the Pickle protocol's definition of `__reduce__`:
     >>> pprint(s.__reduce__())
     (<function _reconstructor at 0x...>,
@@ -183,41 +183,59 @@ Special cases
      {'attr': 4})
 
 
-  - If you cannot tweak the definition of the class, you can still register `single dispatch handler`_ 
-    for that type:
+  - If you cannot tweak the definition of the class or monkeypatch a
+    ``__getfrozenstate__`` method, you can still register `single dispatch
+    handler`_ for that type:
 
-    >>> import pytest; pytest.xfail()
-    >>> from typing import Set, Hashable
+    >>> from typing import Hashable, Optional
     >>> from charmonium.freeze import freeze, _freeze_dispatch, _freeze
     >>> class Test:
     ...     deterministic_val = 3
     ...     nondeterministic_val = 4
     ... 
     >>> @_freeze_dispatch.register(Test)
-    ... def _(obj: Test, tabu: Set[int], level: int) -> Hashable:
+    ... def _(
+    ...         obj: Test,
+    ...         tabu: set[int],
+    ...         level: int,
+    ...         index: int,
+    ...     ) -> tuple[Hashable, bool, Optional[int]]:
     ...     # Type annotations are optional.
     ...     # I have included them here for clarity.
     ... 
     ...     # `tabu` is for object cycle detection.
-    ...     tabu = tabu | {id(obj)}
+    ...     # It is handled for you.
     ... 
     ...     # `level` is for logging and infinite recursion detection.
     ...     level = level + 1
     ... 
     ...     # Freeze should depend only on deterministic values.
     ...     if isinstance(obj.deterministic_val, int):
-    ...         return obj.deterministic_val
+    ...         return (
+    ...             obj.deterministic_val,
+    ...             # The underlying frozen value. It should be hashable.
+    ...             # It is usually made up of frozenset (replaces dict, set, and class attrs)
+    ...             # and tuple (replaces list).
+    ... 
+    ...             False,
+    ...             # Whether the obj is immutable
+    ...             # If the obj is immutable, it's frozen value need not be recomputed every time.
+    ...             # This is handled for you.
+    ... 
+    ...             None,
+    ...             # The depth of references contained here or None
+    ...             # Currently, this doesn't do anything.
+    ...         )
     ...     else:
     ...         # If the underlying instance variable is not hashable, we can use recursion to help.
     ...         # Call `_freeze` instead of `freeze` to recurse with `tabu` and `level`.
-    ...         return _freeze(obj.deterministic_val, tabu, level)
+    ...         return _freeze(obj.deterministic_val, tabu, level, 0)
     ... 
     >>> freeze(Test())
     3
 
 - Note that as of Python 3.7, dictionaries "remember" their insertion order. As such,
 
-  >>> import pytest; pytest.xfail()
   >>> freeze({"a": 1, "b": 2})
   (('a', 1), ('b', 2))
   >>> freeze({"b": 2, "a": 1})

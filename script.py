@@ -304,6 +304,7 @@ async def pytest(use_coverage: bool, show_slow: bool) -> None:
             [
                 "pytest",
                 "--exitfirst",
+                "--failed-first",
                 *(["--durations=3"] if show_slow else []),
                 *([f"--cov={main_package_dir!s}"] if use_coverage else []),
             ],

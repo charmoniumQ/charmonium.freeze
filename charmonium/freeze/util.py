@@ -2,9 +2,20 @@ import builtins
 import dis
 import inspect
 import types
-import inspect
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, NamedTuple, Optional, TypeVar, Generic, Union, Sequence, cast
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+    cast,
+)
 
 
 class VarAttr(NamedTuple):
@@ -15,9 +26,10 @@ class VarAttr(NamedTuple):
 
 
 class ClosureAttrs(NamedTuple):
-    parameters: Iterable[VarAttr]
-    nonlocals: Iterable[VarAttr]
-    myglobals: Iterable[VarAttr]
+    parameters: list[VarAttr]
+    nonlocals: list[VarAttr]
+    myglobals: list[VarAttr]
+
 
 def get_closure_attrs(func: types.FunctionType) -> ClosureAttrs:
     """Like ``getclosurevars``, but is more precise with attributes.
@@ -29,7 +41,7 @@ def get_closure_attrs(func: types.FunctionType) -> ClosureAttrs:
 
     closurevars = getclosurevars(func)
     instructions = list(dis.get_instructions(func))
-    param_names = set(inspect.signature(func).parameters.keys())
+    param_names = set(inspect.signature(func, follow_wrapped=False).parameters.keys())
     parameters = []
     nonlocals = []
     myglobals = []
@@ -38,18 +50,28 @@ def get_closure_attrs(func: types.FunctionType) -> ClosureAttrs:
         is_global = var_name in closurevars.globals.keys()
         is_param = var_name in param_names
         is_nonlocal = var_name in closurevars.nonlocals.keys()
-        if (is_param or is_global or is_nonlocal) and instruction.opname in {"LOAD_GLOBAL", "LOAD_FAST", "LOAD_DEREF"}:
+        if (is_param or is_global or is_nonlocal) and instruction.opname in {
+            "LOAD_GLOBAL",
+            "LOAD_FAST",
+            "LOAD_DEREF",
+        }:
             attr_path: tuple[str, ...] = ()
-            var = None
+            val = None
             if is_global:
                 val = closurevars.globals[var_name]
             if is_nonlocal:
                 val = closurevars.nonlocals[var_name]
             j = i + 1
-            while instructions[j].opname in {"LOAD_ATTR", "LOAD_METHOD"} and j < len(instructions):
-                attr_path = (*attr_path, instructions[j].argval)
+            while instructions[j].opname in {"LOAD_ATTR", "LOAD_METHOD"} and j < len(
+                instructions
+            ):
+                attr_segment = instructions[j].argval
                 if is_global or is_nonlocal:
-                    val = getattr(val, instructions[j].argval)
+                    if hasattr(val, attr_segment):
+                        val = getattr(val, attr_segment)
+                    else:
+                        break
+                attr_path = (*attr_path, attr_segment)
                 j += 1
             if is_param:
                 parameters.append(VarAttr(var_name, attr_path, False, None))
@@ -58,18 +80,20 @@ def get_closure_attrs(func: types.FunctionType) -> ClosureAttrs:
             if is_nonlocal:
                 nonlocals.append(VarAttr(var_name, attr_path, True, val))
 
-    def uniquify(var_attrs: Iterable[VarAttr]) -> Iterable[VarAttr]:
+    def uniquify(var_attrs: list[VarAttr]) -> list[VarAttr]:
         ret_var_attrs = []
         chosen_attrs: set[tuple[str, ...]] = set()
         for var_attr in sorted(var_attrs, key=lambda x: (x.name, x.attr_path)):
             if not any(
-                    (var_attr.name, *var_attr.attr_path[:i]) in chosen_attrs
-                    for i in range(len(var_attr.attr_path) + 1)
+                (var_attr.name, *var_attr.attr_path[:i]) in chosen_attrs
+                for i in range(len(var_attr.attr_path) + 1)
             ):
                 chosen_attrs.add((var_attr.name, *var_attr.attr_path))
                 ret_var_attrs.append(var_attr)
         return ret_var_attrs
+
     return ClosureAttrs(uniquify(parameters), uniquify(nonlocals), uniquify(myglobals))
+
 
 def has_callable(
     obj: object,
@@ -130,10 +154,13 @@ def getclosurevars(func: types.FunctionType) -> inspect.ClosureVars:
 class Sentinel:
     pass
 
+
 sentinel = Sentinel()
 
 
 T = TypeVar("T")
+
+
 class Ref(Generic[T]):
     def __init__(self, default_val: T) -> None:
         self.val = default_val

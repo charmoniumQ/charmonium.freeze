@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import datetime
 import functools
@@ -10,7 +12,17 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
-from typing import Any, Generator, List, Mapping, Type, Generic, TypeVar, cast
+from typing import (
+    Any,
+    ContextManager,
+    Generator,
+    Generic,
+    List,
+    Mapping,
+    Type,
+    TypeVar,
+    cast,
+)
 
 import matplotlib.figure
 import numpy
@@ -38,12 +50,38 @@ class WithProperties:
         return isinstance(other, WithProperties) and self._attrib == other._attrib
 
 
+class WithSlots:
+    __slots__ = ("a", "b")
+
+    def __init__(self, a: int, b: int) -> None:
+        self.a = a
+        self.b = b
+
+
 class WithGetFrozenState:
     def __init__(self, value: int) -> None:
         self._value = value
 
     def __getfrozenstate__(self) -> int:  # pylint: disable=no-self-use
         return 0
+
+
+class TreeNode:
+    def __init__(self, left: Any, right: Any):
+        self.left = left
+        self.right = right
+
+    @staticmethod
+    def cycle_a() -> TreeNode:
+        root = TreeNode(TreeNode(None, None), TreeNode(None, None))
+        root.left.left = root
+        return root
+
+    @staticmethod
+    def cycle_b() -> TreeNode:
+        root = TreeNode(TreeNode(None, None), TreeNode(None, None))
+        root.left.left = root.left
+        return root
 
 
 @functools.singledispatch
@@ -90,22 +128,20 @@ readme_rpb = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb.seek(10)
 
 
-def generator(a) -> Generator[int, None, None]:
+def generator(a: int) -> Generator[int, None, None]:
     for i in range(2):
         yield i
     yield from range(2)
     yield a
 
+
 generator_length = 5
-generators = [
-    generator("hello")
-    for i in range(generator_length)
-]
-generators.append(generator("world"))
+generators = [generator(123) for i in range(generator_length)]
+generators.append(generator(456))
 for i, this_generator in enumerate(generators):
-    for _ in range(i):
+    for _j in range(i):
         next(this_generator)
-context_manager = contextlib.contextmanager(generator(2))
+context_manager = contextlib.contextmanager(generator(2))  # type: ignore
 
 range10p1 = iter(range(10))
 next(range10p1)
@@ -123,8 +159,8 @@ non_equivalents: Mapping[str, Any] = {
     "dict of dicts": [dict(a=1, b=2, c=3), dict(a=1, b=2, c=4)],
     "dict with diff order": [{"a": 1, "b": 2}, {"b": 2, "a": 1}],
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
-    "functools.singledispatch": [single_dispatch_test, determ_hash],
     # TODO: add freeze to functools.singledispatch
+    "functools.singledispatch": [single_dispatch_test, determ_hash],
     "function": [cast, tqdm, *dir(tempfile)],
     "unbound methods": [ClassWithStaticMethod.foo, ClassWithStaticMethod.baz],
     "bound methods": [ClassWithStaticMethod.bar, ClassWithStaticMethod().baz],
@@ -139,7 +175,8 @@ non_equivalents: Mapping[str, Any] = {
     # "context manager": [context_manager],
     "logger": [logging.getLogger("a.b"), logging.getLogger("a.c")],
     "type": [List[int], List[float], ClassWithStaticMethod],
-    "class": [WithProperties, WithGetFrozenState],
+    "slotted object": [WithSlots(1, 2), WithSlots(1, 3)],
+    "class": [WithProperties, WithGetFrozenState, WithSlots],
     "diff classes with same name": [get_class(3), get_class(4)],
     "obj of diff classes with the same name": [get_class(3)(), get_class(4)()],
     "instance method of diff classes with same name": [
@@ -192,6 +229,8 @@ non_equivalents: Mapping[str, Any] = {
     ],
     "datetime": [datetime.timedelta(days=3), datetime.timedelta(days=4)],
     "locky objects": [threading.Lock(), threading.RLock()],
+    # TODO: uncomment this
+    # "cycle to different thing": [TreeNode.cycle_a(), TreeNode.cycle_b()],
 }
 
 
@@ -261,17 +300,22 @@ class A:
 
 
 T = TypeVar("T")
+
+
 class AChild(A, Generic[T]):
     pass
 
+
 class B:
-    # Immutable because of x
+    # mutable because of x
     x = 3
 
 
 class BChild(B):
-    pass
-    # Immutable because inherits B
+    def __init__(self) -> None:
+        self.y = 4
+
+    # mutable because inherits B
 
 
 immutables: List[Any] = [
@@ -281,21 +325,22 @@ immutables: List[Any] = [
     b"hi",
     ((), "hi", frozenset({"hello", "world"})),
     object,
-    A,
-    AChild,
     lambda: 314,
     io,
     str,
+    A,
+    AChild,
+    A(),
+    AChild(),
 ]
 
 non_immutables: List[Any] = [
     [],
     {},
     set(),
-    ([]),
-    A(),
-    # For now, I am assuming attribute reassignment never happens on classes.
-    # TODO: Remove this assumption
-    # B,
-    # BChild,
+    (frozenset(), []),
+    B,
+    B(),
+    BChild,
+    BChild(),
 ]
