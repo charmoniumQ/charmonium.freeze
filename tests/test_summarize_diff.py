@@ -1,3 +1,4 @@
+from typing import Any
 from charmonium.freeze import ObjectLocation as OL
 from charmonium.freeze import config, freeze
 from charmonium.freeze import iterate_diffs_of_frozen as idof
@@ -42,14 +43,18 @@ def test_summarize_diff() -> None:
     ]
     config.ignore_dict_order = False
 
+
 def test_summarize_diff_recursive() -> None:
     class Struct:
-        pass
+        child: Any
+
     a0 = Struct()
-    a0.b = Struct()
-    a0.b.a = a0
+    a0.child = Struct()
+    a0.child.child = a0
     a1 = Struct()
-    a1.b = Struct()
-    a1.b.a = a1.b
+    a1.child = Struct()
+    a1.child.child = a1.child
     assert len(list(idof(OL.create(0, freeze(a0)), OL.create(1, freeze(a1))))) == 1
-    assert len(list(idof(OL.create(0, frozenset({})), OL.create(1, frozenset({}))))) == 0
+    assert (
+        len(list(idof(OL.create(0, frozenset({})), OL.create(1, frozenset({}))))) == 0
+    )

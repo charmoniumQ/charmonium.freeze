@@ -217,7 +217,8 @@ non_equivalents: Mapping[str, Any] = {
         functools.partial(function_test, 3),
         functools.partial(function_test, 4),
     ],
-    "datetime": [datetime.timedelta(days=3), datetime.timedelta(days=4)],
+    "timedelta": [datetime.timedelta(days=3), datetime.timedelta(days=4)],
+    "datetime": [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 1, 1, 1)],
     "locky objects": [threading.Lock(), threading.RLock()],
     # TODO: uncomment this
     # "cycle to different thing": [TreeNode.cycle_a(), TreeNode.cycle_b()],
@@ -276,6 +277,7 @@ equivalents: Mapping[str, List[Any]] = {
     ],
     "threading.Lock": [threading.Lock(), threading.Lock()],
     "threading.RLock": [threading.RLock(), threading.RLock()],
+    "timedelta": [datetime.timedelta(seconds=120), datetime.timedelta(minutes=2)],
 }
 
 # pylint: disable=consider-using-with

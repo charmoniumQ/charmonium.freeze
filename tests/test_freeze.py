@@ -155,3 +155,11 @@ def test_recursion_limit() -> None:
     with pytest.raises(FreezeRecursionError):
         freeze([[[[[["hi"]]]]]])
     config.recursion_limit = old_recursion_limit
+
+
+def test_config_wrong_attr() -> None:
+    # Real attributes should work
+    old_recursion_limit = config.recursion_limit
+    config.recursion_limit = old_recursion_limit
+    with pytest.raises(AttributeError):
+        config.attr_does_not_exist = 4

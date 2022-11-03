@@ -11,8 +11,10 @@ _T = TypeVar("_T")
 
 
 def is_frozen_dict(obj: Iterable[Any]) -> bool:
-    return isinstance(obj, (tuple, frozenset)) and bool(obj) and all(
-        isinstance(elem, tuple) and len(elem) == 2 for elem in obj
+    return (
+        isinstance(obj, (tuple, frozenset))
+        and bool(obj)
+        and all(isinstance(elem, tuple) and len(elem) == 2 for elem in obj)
     )
 
 
