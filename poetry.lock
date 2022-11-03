@@ -57,14 +57,15 @@ tests_no_zope = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>
 
 [[package]]
 name = "autoflake"
-version = "1.4"
+version = "1.7.7"
 description = "Removes unused imports and unused variables"
 category = "dev"
 optional = false
-python-versions = "*"
+python-versions = ">=3.7"
 
 [package.dependencies]
 pyflakes = ">=1.1.0"
+tomli = {version = ">=2.0.1", markers = "python_version < \"3.11\""}
 
 [[package]]
 name = "autoimport"
@@ -1250,7 +1251,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "14c47f055e91abf00044faa9f9570d0c17285425f5c7f9bbe8867964f324ca36"
+content-hash = "81e9e8486af257e23a45c23bd1e6b51754c57a84f74d12a14129056bfcc37b79"
 
 [metadata.files]
 appnope = [
@@ -1273,9 +1274,7 @@ attrs = [
     {file = "attrs-21.4.0-py2.py3-none-any.whl", hash = "sha256:2d27e3784d7a565d36ab851fe94887c5eccd6a463168875832a1be79c82828b4"},
     {file = "attrs-21.4.0.tar.gz", hash = "sha256:626ba8234211db98e869df76230a137c4c40a12d72445c45d5f5b716f076e2fd"},
 ]
-autoflake = [
-    {file = "autoflake-1.4.tar.gz", hash = "sha256:61a353012cff6ab94ca062823d1fb2f692c4acda51c76ff83a8d77915fba51ea"},
-]
+autoflake = []
 autoimport = [
     {file = "autoimport-0.7.5-py3-none-any.whl", hash = "sha256:314092cb422f6f3446c8f3eaa43a0d5005ca1418ea1b30710157e82e835aa976"},
     {file = "autoimport-0.7.5.tar.gz", hash = "sha256:327391b21eb6f0ce14ad20af33a55e7a951681f3514bab5b840b9887fc187913"},

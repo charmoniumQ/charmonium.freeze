@@ -133,6 +133,7 @@ class Config:
     ignore_classes = {
         # TODO[research]: Remove these when we have caching
         # They are purely performance (not correctness)
+        ("pathlib", "PurePath"),
         ("builtins", None),
         ("ABC", None),
         ("ABCMeta", None),
@@ -281,7 +282,12 @@ def _freeze(
     # Suppose obj1 -> obj2, obj2 -> obj1prime and obj1prime -> obj2.
     # obj2 should have a different hash, but if we call `freeze(obj1prime)` first, none of the hashes change.
 
-    if is_immutable and isinstance(obj, permanent_types):
+    # lambdas _would_ be included, because FunctionType is a permanant_type, so exclude them manually.
+    if (
+        is_immutable
+        and isinstance(obj, permanent_types)
+        and not isinstance(obj, types.LambdaType)
+    ):
         memo[id(obj)] = ret
     return ret, is_immutable, ref_depth
 

@@ -129,16 +129,6 @@ all_python_files = list(
 )
 
 
-def autoimport_and_isort(path: Path) -> None:
-    orig_code = path.read_text()
-    code = orig_code
-    # code = autoimport.fix_code(orig_code)
-    code = isort.code(code)
-    # if hash(code) != hash(orig_code):
-    #     path.write_text(code)
-    path.write_text(code)
-
-
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
 
@@ -146,19 +136,37 @@ T2 = TypeVar("T2")
 @app.command()
 @coroutine_to_function
 async def fmt(parallel: bool = True) -> None:
-    with multiprocessing.Pool() as pool:
-        mapper = cast(
-            Callable[[Callable[[T1], T2], Iterable[T1]], Iterable[T2]],
-            pool.imap_unordered if parallel else map,
-        )
-        list(mapper(autoimport_and_isort, all_python_files))
-    await pretty_run(["black", "--quiet", *all_python_files])
+    await pretty_run([
+        "autoflake",
+        "--in-place",
+        "--recursive",
+        "--remove-all-unused-imports",
+        "--ignore-init-module-imports",
+        "."
+    ])
+    await pretty_run([
+        "isort",
+        "--overwrite-in-place",
+        "--color",
+        "."
+    ])
+    await pretty_run(["black", *all_python_files])
 
 
 @app.command()
 @coroutine_to_function
 async def test() -> None:
     await asyncio.gather(
+        pretty_run(
+            [
+                "autoflake",
+                "--in-place",
+                "--recursive",
+                "--remove-all-unused-imports",
+                "--ignore-init-module-imports",
+                "."
+            ],
+        ),
         pretty_run(
             [
                 "mypy",
@@ -305,7 +313,7 @@ async def pytest(use_coverage: bool, show_slow: bool) -> None:
                 "pytest",
                 "--exitfirst",
                 "--failed-first",
-                *(["--durations=3"] if show_slow else []),
+                *(["--durations=10"] if show_slow else []),
                 *([f"--cov={main_package_dir!s}"] if use_coverage else []),
             ],
             checker=lambda proc: proc.returncode in {0, 5},

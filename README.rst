@@ -206,7 +206,7 @@ Special cases
     ...     # `tabu` is for object cycle detection.
     ...     # It is handled for you.
     ... 
-    ...     # `level` is for logging and infinite recursion detection.
+    ...     # `level` is for logging and recursion limits.
     ...     level = level + 1
     ... 
     ...     # Freeze should depend only on deterministic values.

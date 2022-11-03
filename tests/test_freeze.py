@@ -33,35 +33,17 @@ from obj_test_cases import (
     non_immutables,
 )
 
-from charmonium.freeze import FreezeRecursionError, UnfreezableTypeError, config, freeze
+from charmonium.freeze import (
+    FreezeRecursionError,
+    UnfreezableTypeError,
+    config,
+    freeze,
+    summarize_diff_of_frozen,
+)
 from charmonium.freeze.lib import _freeze
 
 
-def print_inequality_in_hashables(
-    x: Hashable,
-    y: Hashable,
-    stack: Tuple[str, ...] = (),
-    file: Optional[IO[str]] = None,
-) -> None:
-    if isinstance(x, tuple) and isinstance(y, tuple):
-        for i, (xi, yi) in enumerate(itertools.zip_longest(x, y)):
-            print_inequality_in_hashables(xi, yi, stack + (f"[{i}]",))
-    elif isinstance(x, frozenset) and isinstance(y, frozenset):
-        if x ^ y:
-            print("x ^ y == ", x ^ y, "at obj" + "".join(stack), file=file)
-    else:
-        if x != y:
-            print(
-                textwrap.shorten(repr(x), 70),
-                "!=",
-                textwrap.shorten(repr(y), 70),
-                "at obj" + "".join(stack),
-                file=file,
-            )
-
-
-def test_immmutability(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
+def test_immmutability() -> None:
     for obj in immutables:
         frozen = _freeze(obj, {}, 0, 0)
         if not frozen[1]:
@@ -77,8 +59,7 @@ def test_immmutability(caplog: pytest.LogCaptureFixture) -> None:
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
-def test_freeze_works(caplog: pytest.LogCaptureFixture, input_kind: str) -> None:
-    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
+def test_freeze_works(input_kind: str) -> None:
     for value in non_equivalents[input_kind]:
         frozen = freeze(value)
         try:
@@ -91,10 +72,7 @@ def test_freeze_works(caplog: pytest.LogCaptureFixture, input_kind: str) -> None
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
-def test_freeze_total_uniqueness(
-    caplog: pytest.LogCaptureFixture, input_kind: str
-) -> None:
-    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
+def test_freeze_total_uniqueness(input_kind: str) -> None:
     values = non_equivalents[input_kind]
     frozen_values = [(value, freeze(value)) for value in values]
     for i, (this_value, this_freeze) in enumerate(frozen_values):
@@ -107,10 +85,7 @@ def test_freeze_total_uniqueness(
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys() - non_copyable_types)
-def test_determinism_over_copies(
-    caplog: pytest.LogCaptureFixture, input_kind: str
-) -> None:
-    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
+def test_determinism_over_copies(input_kind: str) -> None:
     for value in non_equivalents[input_kind]:
         freeze0 = freeze(copy.deepcopy(value))
         if input_kind == "@functools.singledispatch":
@@ -119,7 +94,7 @@ def test_determinism_over_copies(
             value((32, ((10), frozenset({"hello"}))))
         freeze1 = freeze(value)
         if freeze0 != freeze1:
-            print_inequality_in_hashables(freeze0, freeze1)
+            summarize_diff_of_frozen(freeze0, freeze1)
             print(pprint.pformat(freeze0, width=1000))
             print(pprint.pformat(freeze1, width=1000))
         assert freeze0 == freeze1
@@ -140,7 +115,7 @@ def fixture_past_freezes() -> Mapping[str, List[List[Any]]]:
     )
     return cast(
         Mapping[str, List[List[Any]]],
-        pickle.loads(base64.b64decode(proc.stdout)),
+        pickle.loads(proc.stdout),
     )
 
 
@@ -149,23 +124,18 @@ if __name__ == "__main__":
         value_kind: [freeze(value) for value in values]
         for value_kind, values in non_equivalents.items()
     }
-    data_ser = "\n".join(textwrap.wrap(base64.b64encode(pickle.dumps(data)).decode()))
-    data_deser = pickle.loads(base64.b64decode(data_ser))
-    assert data_deser == data
-    sys.stdout.write(data_ser)
+    sys.stdout.buffer.write(pickle.dumps(data))
 
 
 @pytest.mark.parametrize("input_kind", non_equivalents.keys())
 def test_determinism_over_processes(
-    caplog: pytest.LogCaptureFixture,
     input_kind: str,
     past_freezes: Mapping[str, List[int]],
 ) -> None:
-    caplog.set_level(logging.DEBUG, logger="charmonium.freeze")
     for past_hash, value in zip(past_freezes[input_kind], non_equivalents[input_kind]):
         new_hash = freeze(value)
         if past_hash != new_hash:
-            print_inequality_in_hashables(past_hash, new_hash)
+            summarize_diff_of_frozen(past_hash, new_hash)
             pprint.pprint(past_hash, width=1000)
             pprint.pprint(new_hash, width=1000)
         assert past_hash == new_hash, f"Determinism-over-processes failed for {value}"

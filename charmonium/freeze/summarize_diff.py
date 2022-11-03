@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import dataclasses
 import pprint
 from typing import Any, Callable, Hashable, Iterable, TypeVar, cast
@@ -6,14 +7,12 @@ from typing import Any, Callable, Hashable, Iterable, TypeVar, cast
 from .lib import freeze
 from .util import common_prefix
 
-
 _T = TypeVar("_T")
 
 
 def is_frozen_dict(obj: Iterable[Any]) -> bool:
     return isinstance(obj, (tuple, frozenset)) and all(
-        isinstance(elem, tuple) and len(elem) == 2
-        for elem in obj
+        isinstance(elem, tuple) and len(elem) == 2 for elem in obj
     )
 
 
@@ -43,16 +42,18 @@ def summarize_diff(obj0: Any, obj1: Any) -> str:
 
 
 def summarize_diff_of_frozen(obj0: Hashable, obj1: Hashable) -> str:
-    differences = list(iterate_diffs_of_frozen(
-        ObjectLocation(
-            labels=("obj0",),
-            objects=(obj0,),
-        ),
-        ObjectLocation(
-            labels=("obj1",),
-            objects=(obj1,),
-        ),
-    ))
+    differences = list(
+        iterate_diffs_of_frozen(
+            ObjectLocation(
+                labels=("obj0",),
+                objects=(obj0,),
+            ),
+            ObjectLocation(
+                labels=("obj1",),
+                objects=(obj1,),
+            ),
+        )
+    )
     if differences:
         longest_common = differences[0][0].labels[1:]
         for difference in differences:
@@ -61,21 +62,33 @@ def summarize_diff_of_frozen(obj0: Hashable, obj1: Hashable) -> str:
         ret = []
         if len(longest_common) > 3:
             ret.append("obj0_sub = obj0{}".format("".join(longest_common)))
-            ret.append(pprint.pformat(differences[0][0].objects[len(longest_common)], width=300))
+            ret.append(
+                pprint.pformat(
+                    differences[0][0].objects[len(longest_common)], width=300
+                )
+            )
             ret.append("obj1_sub = obj1{}".format("".join(longest_common)))
-            ret.append(pprint.pformat(differences[0][1].objects[len(longest_common)], width=300))
+            ret.append(
+                pprint.pformat(
+                    differences[0][1].objects[len(longest_common)], width=300
+                )
+            )
         for difference in differences:
-            path_from_sub = "".join(difference[0].labels[len(longest_common) + 1:])
-            ret.append("obj0_sub{} == {}".format(path_from_sub, difference[0].objects[-1]))
-            ret.append("obj1_sub{} == {}".format(path_from_sub, difference[1].objects[-1]))
+            path_from_sub = "".join(difference[0].labels[len(longest_common) + 1 :])
+            ret.append(
+                "obj0_sub{} == {}".format(path_from_sub, difference[0].objects[-1])
+            )
+            ret.append(
+                "obj1_sub{} == {}".format(path_from_sub, difference[1].objects[-1])
+            )
         return "\n".join(ret)
     else:
         return "no differences"
 
 
 def iterate_diffs_of_frozen(
-        obj0: ObjectLocation,
-        obj1: ObjectLocation,
+    obj0: ObjectLocation,
+    obj1: ObjectLocation,
 ) -> Iterable[tuple[ObjectLocation, ObjectLocation]]:
     if obj0.tail.__class__ != obj1.tail.__class__:
         yield (
