@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import datetime
 import itertools
-import multiprocessing
 import os
 import shlex
 import shutil
@@ -28,7 +27,6 @@ from typing import (
 )
 
 # import autoimport
-import isort
 import setuptools
 import toml
 import typer
@@ -136,20 +134,17 @@ T2 = TypeVar("T2")
 @app.command()
 @coroutine_to_function
 async def fmt(parallel: bool = True) -> None:
-    await pretty_run([
-        "autoflake",
-        "--in-place",
-        "--recursive",
-        "--remove-all-unused-imports",
-        "--ignore-init-module-imports",
-        "."
-    ])
-    await pretty_run([
-        "isort",
-        "--overwrite-in-place",
-        "--color",
-        "."
-    ])
+    await pretty_run(
+        [
+            "autoflake",
+            "--in-place",
+            "--recursive",
+            "--remove-all-unused-imports",
+            "--ignore-init-module-imports",
+            ".",
+        ]
+    )
+    await pretty_run(["isort", "--overwrite-in-place", "--color", "."])
     await pretty_run(["black", *all_python_files])
 
 
@@ -164,7 +159,7 @@ async def test() -> None:
                 "--recursive",
                 "--remove-all-unused-imports",
                 "--ignore-init-module-imports",
-                "."
+                ".",
             ],
         ),
         pretty_run(

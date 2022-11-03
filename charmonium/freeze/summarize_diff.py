@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import pprint
-from typing import Any, Callable, Hashable, Iterable, TypeVar, cast
+from typing import Any, Hashable, Iterable, TypeVar, cast
 
 from .lib import freeze
 from .util import common_prefix

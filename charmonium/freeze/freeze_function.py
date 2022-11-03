@@ -1,11 +1,9 @@
-import sys
 import types
 from pathlib import Path
-from typing import Any, Hashable, Optional
+from typing import Hashable, Optional
 
 from . import util
 from .lib import (
-    _freeze,
     combine_frozen,
     config,
     freeze_attrs,

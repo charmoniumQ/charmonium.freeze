@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import collections
-import copyreg
 import functools
 import logging
 import re
 import textwrap
 import types
 from pathlib import Path
-from typing import Any, Callable, Hashable, Mapping, Optional, Sequence, cast
+from typing import Any, Hashable, Mapping, Optional, Sequence, cast
 
-from .util import Ref, getclosurevars, is_relative_to
+from .util import Ref
 
 logger = logging.getLogger("charmonium.freeze")
 

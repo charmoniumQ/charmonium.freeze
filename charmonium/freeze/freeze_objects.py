@@ -9,7 +9,6 @@ from .lib import (
     freeze_attrs,
     freeze_dispatch,
     freeze_sequence,
-    logger,
 )
 
 dispatch_table = cast(

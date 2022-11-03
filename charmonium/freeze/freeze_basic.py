@@ -2,7 +2,7 @@ import io
 import logging
 import re
 import types
-from typing import Any, Hashable, Iterable, Optional
+from typing import Any, Hashable, Optional
 
 from .lib import _freeze, config, freeze_attrs, freeze_dispatch, freeze_sequence, logger
 

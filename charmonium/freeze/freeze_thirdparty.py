@@ -4,7 +4,7 @@ import io
 import pickle
 from typing import Any, Hashable, Optional
 
-from .lib import UnfreezableTypeError, _freeze, config, freeze_dispatch
+from .lib import UnfreezableTypeError, _freeze, freeze_dispatch
 
 try:
     import numpy

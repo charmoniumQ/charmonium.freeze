@@ -2,7 +2,7 @@ import os
 import pprint
 import re
 import types
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from charmonium.freeze import util
 

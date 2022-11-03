@@ -12,17 +12,7 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
-from typing import (
-    Any,
-    ContextManager,
-    Generator,
-    Generic,
-    List,
-    Mapping,
-    Type,
-    TypeVar,
-    cast,
-)
+from typing import Any, Generator, Generic, List, Mapping, Type, TypeVar, cast
 
 import matplotlib.figure
 import numpy

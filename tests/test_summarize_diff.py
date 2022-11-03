@@ -2,7 +2,6 @@ from charmonium.freeze import ObjectLocation as OL
 from charmonium.freeze import config, freeze
 from charmonium.freeze import iterate_diffs_of_frozen as idof
 from charmonium.freeze import summarize_diff
-from charmonium.freeze.summarize_diff import is_frozen_dict
 
 
 def test_iterate_diffs_of_frozen() -> None:

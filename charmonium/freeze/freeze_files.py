@@ -1,9 +1,8 @@
 import io
 import sys
-import types
-from typing import Any, Hashable, Optional
+from typing import Hashable, Optional
 
-from .lib import UnfreezableTypeError, _freeze, config, freeze_dispatch
+from .lib import UnfreezableTypeError, _freeze, freeze_dispatch
 
 
 @freeze_dispatch.register
