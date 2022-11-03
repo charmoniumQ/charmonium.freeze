@@ -33,5 +33,3 @@ jobs:
           ls -al
 
       - run: nix develop --command ./script.py all-tests --no-interactive
-
-      - uses: codecov/codecov-action@v2
