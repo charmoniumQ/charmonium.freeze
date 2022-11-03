@@ -11,7 +11,7 @@ _T = TypeVar("_T")
 
 
 def is_frozen_dict(obj: Iterable[Any]) -> bool:
-    return isinstance(obj, (tuple, frozenset)) and all(
+    return isinstance(obj, (tuple, frozenset)) and bool(obj) and all(
         isinstance(elem, tuple) and len(elem) == 2 for elem in obj
     )
 
@@ -109,8 +109,8 @@ def iterate_diffs_of_frozen(
         # could be dict
         if is_frozen_dict(obj0.tail) and is_frozen_dict(obj1.tail):
             # treat as dict
-            obj0.tail = dict(cast(frozenset[tuple[Hashable, Any]], obj0.tail))
-            obj1.tail = dict(cast(frozenset[tuple[Hashable, Any]], obj1.tail))
+            obj0.tail = dict(cast(FrozenSet[Tuple[Hashable, Any]], obj0.tail))
+            obj1.tail = dict(cast(FrozenSet[Tuple[Hashable, Any]], obj1.tail))
             yield from iterate_diffs_of_frozen(obj0, obj1)
         else:
             # treat frozenset as a pure tuple

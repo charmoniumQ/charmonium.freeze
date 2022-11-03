@@ -41,3 +41,15 @@ def test_summarize_diff() -> None:
         "obj1_sub[4]['b'] == 7",
     ]
     config.ignore_dict_order = False
+
+def test_summarize_diff_recursive() -> None:
+    class Struct:
+        pass
+    a0 = Struct()
+    a0.b = Struct()
+    a0.b.a = a0
+    a1 = Struct()
+    a1.b = Struct()
+    a1.b.a = a1.b
+    assert len(list(idof(OL.create(0, freeze(a0)), OL.create(1, freeze(a1))))) == 1
+    assert len(list(idof(OL.create(0, frozenset({})), OL.create(1, frozenset({}))))) == 0
