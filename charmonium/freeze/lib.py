@@ -33,7 +33,7 @@ class Config:
     # Put ``(module, global_name)`` of which never change or whose changes do
     # not affect the result computation here (e.g. global caches). This will not
     # attempt to freeze their state.
-    ignore_globals: set[tuple[str, str]] = {
+    ignore_globals = {
         # tempdir caches the name of the temporary directory on this platorm.
         ("tempfile", "tempdir"),
         # thread status variables don't directly affect computation.
@@ -56,7 +56,7 @@ class Config:
     # their state. Note that the module and name may be different than the
     # identifier you use to import the function. Use ``function.__module__`` and
     # ``function.__name__`` to be sure.
-    ignore_nonlocals: set[tuple[str, str, str]] = {
+    ignore_nonlocals = {
         # Special case for functools.single_dispatch: We need to ignore the
         # following non-locals, as their mutation do not affect the actual
         # computation.
@@ -67,14 +67,17 @@ class Config:
     # Put paths to source code that whose source code never changes or those
     # changes do not affect the result computation. I will still recurse into
     # the closure of these functions, just not its source code though.
-    assume_constant_files: set[Path] = {Path(functools.__file__).parent}
+    ignore_files = {Path(functools.__file__).parent}
+
+    # Whether to assume that all code is constant
+    ignore_all_code = False
 
     # Put ``(object.__module__, object.__class__.__name__, attribute)`` of
     # object attributes which never change or whose changes do not affect the
     # result computation here (e.g. cached attributes). This will not attempt to
     # freeze their state. Note that the module may be different than the name
     # you import it as. Use ``object.__module__`` to be sure.
-    ignore_attributes: set[tuple[str, str, str]] = {
+    ignore_attributes = {
         ("pandas.core.internals.blocks", "Block", "_cache"),
     }
 
@@ -82,7 +85,7 @@ class Config:
     # not affect the result computation here (e.g. caches, locks, and
     # threads). Use ``object.__module__`` and ``object.__class__.__name__`` to
     # be sure.
-    ignore_objects_by_class: set[tuple[str, str]] = {
+    ignore_objects_by_class = {
         ("builtins", "_abc_data"),
         ("_abc", "_abc_data"),
         ("_thread", "RLock"),
@@ -121,10 +124,13 @@ class Config:
     # ``config.ignore_objects_by_class`` if applicable.
     ignore_objects_by_id: set[int] = set()
 
+    # Whether to ignore all classes
+    ignore_all_classes = False
+
     # Put ``(class.__module__, class.__name__)`` of classes whose source code
     # and class attributes never change or those changes do not affect the
     # result computation.
-    ignore_classes: set[tuple[str, Optional[str]]] = {
+    ignore_classes = {
         # TODO[research]: Remove these when we have caching
         # They are purely performance (not correctness)
         ("builtins", None),
@@ -147,6 +153,8 @@ class Config:
     ignore_functions: set[tuple[str, str]] = set()
 
     ignore_extensions = True
+
+    ignore_dict_order = False
 
     log_width = 250
 

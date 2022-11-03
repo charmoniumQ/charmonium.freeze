@@ -69,14 +69,18 @@ def _(
     depth: int,
     index: int,
 ) -> tuple[Hashable, bool, Optional[int]]:
-    return freeze_sequence(obj.items(), True, True, tabu, depth, 0)
+    return freeze_sequence(
+        obj.items(), True, not config.ignore_dict_order, tabu, depth, 0
+    )
 
 
 @freeze_dispatch.register(dict)
 def _(
     obj: dict[Hashable, Any], tabu: dict[int, tuple[int, int]], depth: int, index: int
 ) -> tuple[Hashable, bool, Optional[int]]:
-    return freeze_sequence(obj.items(), False, True, tabu, depth, 0)
+    return freeze_sequence(
+        obj.items(), False, not config.ignore_dict_order, tabu, depth, 0
+    )
 
 
 @freeze_dispatch.register

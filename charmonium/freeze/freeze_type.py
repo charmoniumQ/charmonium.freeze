@@ -27,7 +27,8 @@ def freeze_class(
 ) -> tuple[Hashable, bool, Optional[int]]:
     type_pair = (obj.__module__, obj.__name__)
     if (
-        (type_pair[0], None) in config.ignore_classes
+        config.ignore_all_classes
+        or (type_pair[0], None) in config.ignore_classes
         or type_pair in config.ignore_classes
         or obj is object
         # or (config.ignore_extensions and (

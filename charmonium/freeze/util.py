@@ -158,20 +158,20 @@ class Sentinel:
 sentinel = Sentinel()
 
 
-T = TypeVar("T")
+_T = TypeVar("_T")
 
 
-class Ref(Generic[T]):
-    def __init__(self, default_val: T) -> None:
+class Ref(Generic[_T]):
+    def __init__(self, default_val: _T) -> None:
         self.val = default_val
 
-    def get(self) -> T:
+    def get(self) -> _T:
         return self.val
 
-    def set(self, new_val: T) -> None:
+    def set(self, new_val: _T) -> None:
         self.val = new_val
 
-    def __call__(self, new_val: Union[T, Sentinel] = sentinel) -> T:
+    def __call__(self, new_val: Union[_T, Sentinel] = sentinel) -> _T:
         if not isinstance(new_val, Sentinel):
             self.set(new_val)
         return self.get()
@@ -185,3 +185,13 @@ def is_relative_to(a: Path, b: Path) -> bool:
         return False
     else:
         return True
+
+
+def common_prefix(it0: Iterable[_T], it1: Iterable[_T]) -> tuple[_T, ...]:
+    ret: tuple[_T, ...] = ()
+    for elem0, elem1 in zip(it0, it1):
+        if elem0 == elem1:
+            ret = (*ret, elem0)
+        else:
+            break
+    return ret

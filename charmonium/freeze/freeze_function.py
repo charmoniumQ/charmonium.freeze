@@ -58,9 +58,9 @@ def freeze_code(
     obj: types.CodeType, tabu: dict[int, tuple[int, int]], depth: int, index: int
 ) -> tuple[Hashable, bool, Optional[int]]:
     source_loc = Path(obj.co_filename)
-    if any(
+    if config.ignore_all_code or any(
         util.is_relative_to(source_loc, constant_file)
-        for constant_file in config.assume_constant_files
+        for constant_file in config.ignore_files
     ):
         return (
             (

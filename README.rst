@@ -331,15 +331,17 @@ TODO
   - ☐ Test functions with minor changes.
   - ☐ Test set/dict with diff hash.
   - ☐ Test obj with slots.
-  - ☐ Test hash for objects and classes more carefully.
+  - ☑ Test hash for objects and classes more carefully.
   - ☑ Improve test coverage.
-  - ☐ Investigate when modules are assumed constant.
+  - ☑ Investigate when modules are assumed constant.
 
 - ☑ API
 
   - ☑ Use user-customizable multidispatch.
   - ☑ Make it easier to register a freeze method for a type.
   - ☑ Encapsulate global config `freeze` into object.
+  - ☐ Make freeze object-oriented with a module-level instance, like `random.random` and `random.Random`.
+    - This makes it easier for different callers to have their own configuration options.
   - ☐ Move "get call graph" into its own package.
   - ☐ Document configuration options.
 
@@ -359,6 +361,6 @@ TODO
 - ☐ Performance
 
   - ☐ Make performance benchmarks.
-  - ☐ Memoize the hash of immutable data:
+  - ☑ Memoize the hash of immutable data:
     - If function contains no locals or globals except other immutables, it is immutable.
     - If a collection is immutable and contains only immutables, it is immutable.
