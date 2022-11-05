@@ -134,6 +134,17 @@ def test_consistency_over_identicals() -> None:
             assert freeze(value) == expected
 
 
+def test_freeze_has_instance_methods() -> None:
+    class A:
+        def stuff(self) -> str:
+            return "foo"
+    assert "foo" in repr(freeze(A))
+    assert "foo" in repr(freeze(A()))
+    def stuff(self) -> str:
+        return "bar"
+    assert "bar" in repr(freeze(stuff))
+
+
 @pytest.mark.parametrize("input_kind", non_freezable_types.keys())
 def test_reject_bad_types(input_kind: str) -> None:
     with pytest.raises(UnfreezableTypeError):

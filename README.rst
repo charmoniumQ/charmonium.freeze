@@ -325,12 +325,12 @@ TODO
   - ☑ Test hashing sets with different orders. Assert tests fail.
   - ☑ Test hashing dicts with different orders. Assert tests fail.
   - ☑ Don't include properties in hash.
-  - ☐ Test that freeze of an object includes freeze of its instance methods.
+  - ☑ Test that freeze of an object includes freeze of its instance methods.
   - ☐ Freeze module by its attributes, unless module is constant.
   - ☐ Support closures which include ``import x`` and ``from x import y``
-  - ☐ Test functions with minor changes.
+  - ☑ Test functions with minor changes.
   - ☐ Test set/dict with diff hash.
-  - ☐ Test obj with slots.
+  - ☑ Test obj with slots.
   - ☑ Test hash for objects and classes more carefully.
   - ☑ Improve test coverage.
   - ☑ Investigate when modules are assumed constant.
@@ -342,10 +342,12 @@ TODO
   - ☑ Encapsulate global config `freeze` into object.
   - ☐ Make freeze object-oriented with a module-level instance, like `random.random` and `random.Random`.
     - This makes it easier for different callers to have their own configuration options.
+    - ☐ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what `charmonium.determ_hash` does.
   - ☐ Move "get call graph" into its own package.
   - ☐ Document configuration options.
+  - ☐ Document `summarize_diff` and `iterate_diffs`.
 
-- ☐ Make ``freeze`` handle more types:
+- ☑ Make ``freeze`` handle more types:
 
   - ☑ Module: freeze by name.
   - ☑ Objects: include the source-code of methods.
