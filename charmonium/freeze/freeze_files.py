@@ -1,16 +1,17 @@
 import io
 import sys
-from typing import Dict, Hashable, Optional, Tuple
+from typing import Dict, Hashable, Optional, Tuple, cast
 
 from .lib import UnfreezableTypeError, _freeze, freeze_dispatch
+from .config import Config
 
 
 @freeze_dispatch.register
 def _(
-    obj: io.TextIOBase, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: io.TextIOBase, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     if hasattr(obj, "buffer"):
-        return _freeze(obj.buffer, tabu, depth, index)
+        return _freeze(obj.buffer, config, tabu, depth, index)
     else:
         raise UnfreezableTypeError(
             f"Don't know how to serialize {type(obj)} {obj}. See source code for special cases."
@@ -19,7 +20,7 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.BufferedWriter, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: io.BufferedWriter, _config: Config, _tabu: Dict[int, Tuple[int, int]], _depth: int, _index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     # If a buffered writers is both pointing to the same file, writing on it has the same side-effect.
     # Otherwise, it has a different side-effect.
@@ -36,7 +37,7 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.BufferedReader, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: io.BufferedReader, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     raise UnfreezableTypeError(
         f"Cannot freeze readable non-seekable streams such as {obj}. I have no way of knowing your position in the stream without modifying it."
@@ -45,7 +46,7 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.BufferedRandom, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: io.BufferedRandom, _config: Config, _tabu: Dict[int, Tuple[int, int]], _depth: int, _index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     name = getattr(obj, "name", None)
     if name is not None:
@@ -64,14 +65,14 @@ def _(
 
 @freeze_dispatch.register
 def _(
-    obj: io.FileIO, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: io.FileIO, _config: Config, _tabu: Dict[int, Tuple[int, int]], _depth: int, _index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     if obj.fileno() == sys.stderr.fileno():
         return "<stderr>", True, None
     elif obj.fileno() == sys.stdout.fileno():
         return "<stdout>", True, None
     elif obj.mode in {"w", "x", "a", "wb", "xb", "ab"}:
-        return obj.name, True, None
+        return cast(Hashable, obj.name), True, None
     elif obj.mode in {"r", "rb"}:
         raise UnfreezableTypeError(
             f"Cannot freeze readable non-seekable streams such as {obj}."
@@ -92,5 +93,5 @@ def _(
             )
     else:
         raise UnfreezableTypeError(
-            f"{obj.name} {obj.mode} must be a special kind of file."
+            f"{obj.name!r} {obj.mode!r} must be a special kind of file."
         )

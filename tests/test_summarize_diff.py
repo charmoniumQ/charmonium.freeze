@@ -1,14 +1,16 @@
 from typing import Any
 from charmonium.freeze import ObjectLocation as OL
-from charmonium.freeze import config, freeze
+from charmonium.freeze import Config, freeze
 from charmonium.freeze import iterate_diffs_of_frozen as idof
 from charmonium.freeze import summarize_diff
 
 
+config = Config(ignore_dict_order=True)
+obj0 = freeze([0, 1, 2, {3, 4}, {"a": 5, "b": 6, "c": 7}, 8], config)
+obj1 = freeze([0, 8, 2, {3, 5}, {"a": 5, "b": 7, "d": 8}], config)
+
+
 def test_iterate_diffs_of_frozen() -> None:
-    config.ignore_dict_order = True
-    obj0 = freeze([0, 1, 2, {3, 4}, {"a": 5, "b": 6, "c": 7}, 8])
-    obj1 = freeze([0, 8, 2, {3, 5}, {"a": 5, "b": 7, "d": 8}])
     differences = list(idof(OL.create(0, obj0), OL.create(1, obj1)))
     assert differences[0][0].labels == ("obj0", ".__len__()")
     assert differences[1][0].labels == ("obj0", "[1]")
@@ -22,10 +24,7 @@ def test_iterate_diffs_of_frozen() -> None:
 
 
 def test_summarize_diff() -> None:
-    config.ignore_dict_order = True
-    obj0 = freeze([0, 1, 2, {3, 4}, {"a": 5, "b": 6, "c": 7}, 8])
-    obj1 = freeze([0, 8, 2, {3, 5}, {"a": 5, "b": 7, "d": 8}])
-    assert summarize_diff(obj0, obj1).split("\n") == [
+    assert summarize_diff(obj0, obj1, config).split("\n") == [
         "obj0_sub.__len__() == 6",
         "obj1_sub.__len__() == 5",
         "obj0_sub[1] == 1",

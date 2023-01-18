@@ -1,26 +1,30 @@
+from __future__ import annotations
+
 import types
 from typing import Any, Dict, Hashable, Optional, Tuple, Type
 
-from .lib import _freeze, combine_frozen, config, freeze_attrs, freeze_dispatch, logger
+from .lib import _freeze, combine_frozen, freeze_attrs, freeze_dispatch, logger
+from .config import Config
 
 
 @freeze_dispatch.register(type)
 def _(
     obj: Type[Any],
+    config: Config,
     tabu: Dict[int, Tuple[int, int]],
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     assert obj == obj.__mro__[0]
-    ret = freeze_class(obj.__mro__[0], tabu, depth, 0)
-    for index, class_ in enumerate(obj.__mro__[1:]):
-        # TODO: use index to freeze_class properly
-        ret = combine_frozen(ret, freeze_class(class_, tabu, depth, index))
+    ret = freeze_class(obj.__mro__[0], config, tabu, depth, index)
+    for subindex, class_ in enumerate(obj.__mro__[1:]):
+        ret = combine_frozen(ret, freeze_class(class_, config, tabu, depth, subindex))
     return ret
 
 
 def freeze_class(
     obj: Type[Any],
+    config: Config,
     tabu: Dict[int, Tuple[int, int]],
     depth: int,
     index: int,
@@ -38,69 +42,57 @@ def freeze_class(
     ):
         logger.debug("%s ignoring %s", " " * depth, type_pair)
         return (b"class", ".".join(type_pair)), True, None
+    # NOTE: this says that a class never gets new attributes and attributes never get reassigned.
+    # E.g., If A.x is a list, A is mutable; if A.x is a tuple, A is immutable (assume no A.y = 3 and no A.y = different_tuple).
     ret = freeze_attrs(
         {
             key: val
             for index, (key, val) in enumerate(sorted(obj.__dict__.items()))
-            if key not in special_class_attributes
+            if key not in config.special_class_attributes
             and (obj.__module__, obj.__name__, key) not in config.ignore_attributes
         },
         True,
+        True,
+        config,
         tabu,
         depth,
-        index,
     )
     return (b"class", obj.__name__, ret[0]), ret[1], ret[2]
 
 
-# TODO: Put this in config
-special_class_attributes = {
-    "__orig_bases__",
-    "__dict__",
-    "__weakref__",
-    "__doc__",
-    "__parameters__",
-    "__slots__",
-    "__slotnames__",
-    "__mro_entries__",
-    "__annotations__",
-    "__hash__",
-    # Some scripts are designed to be either executed or imported.
-    # In that case, the __module__ can be either __main__ or a qualified module name.
-    # As such, I exclude the name of the module containing the class.
-    "__module__",
-}
+@freeze_dispatch.register(staticmethod)
+def _(
+    obj: staticmethod[Any],
+    config: Config,
+    tabu: Dict[int, Tuple[int, int]],
+    depth: int,
+    index: int,
+) -> Tuple[Hashable, bool, Optional[int]]:
+    return _freeze(obj.__func__, config, tabu, depth - 1, index)
+
+
+@freeze_dispatch.register(classmethod)
+def _(
+    obj: classmethod[Any], config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
+    return _freeze(obj.__func__, config, tabu, depth - 1, index)
 
 
 @freeze_dispatch.register
 def _(
-    obj: staticmethod, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: types.MethodType, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    return _freeze(obj.__func__, tabu, depth - 1, index)
+    return _freeze((obj.__self__, obj.__func__), config, tabu, depth - 1, index)
 
 
 @freeze_dispatch.register
 def _(
-    obj: classmethod, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+        obj: property, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, _index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    return _freeze(obj.__func__, tabu, depth - 1, index)
-
-
-@freeze_dispatch.register
-def _(
-    obj: types.MethodType, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
-) -> Tuple[Hashable, bool, Optional[int]]:
-    return _freeze((obj.__self__, obj.__func__), tabu, depth - 1, index)
-
-
-@freeze_dispatch.register
-def _(
-    obj: property, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
-) -> Tuple[Hashable, bool, Optional[int]]:
-    ret = (), True, None
-    ret = combine_frozen(ret, _freeze(obj.fget, tabu, depth, 0))
-    ret = combine_frozen(ret, _freeze(obj.fset, tabu, depth, 1))
-    ret = combine_frozen(ret, _freeze(obj.fdel, tabu, depth, 2))
+    ret: tuple[Hashable, bool, Optional[int]] = (), True, None
+    ret = combine_frozen(ret, _freeze(obj.fget, config, tabu, depth, 0))
+    ret = combine_frozen(ret, _freeze(obj.fset, config, tabu, depth, 1))
+    ret = combine_frozen(ret, _freeze(obj.fdel, config, tabu, depth, 2))
     return (b"property", *ret[0]), ret[1], ret[2]
 
 
@@ -111,6 +103,6 @@ def _(
 @freeze_dispatch.register(types.GetSetDescriptorType)
 @freeze_dispatch.register(types.MemberDescriptorType)
 def _(
-    obj: Any, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+        obj: Any, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     return (obj.__class__.__name__.encode(), obj.__name__), True, None

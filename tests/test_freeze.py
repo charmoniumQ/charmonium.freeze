@@ -22,7 +22,8 @@ from obj_test_cases import (
 from charmonium.freeze import (
     FreezeRecursionError,
     UnfreezableTypeError,
-    config,
+    Config,
+    global_config,
     freeze,
     summarize_diff_of_frozen,
 )
@@ -31,13 +32,13 @@ from charmonium.freeze.lib import _freeze
 
 def test_immmutability() -> None:
     for obj in immutables:
-        frozen = _freeze(obj, {}, 0, 0)
+        frozen = _freeze(obj, global_config, {}, 0, 0)
         if not frozen[1]:
             pprint.pprint(obj, width=1000)
             pprint.pprint(frozen, width=1000)
         assert frozen[1]
     for obj in non_immutables:
-        frozen = _freeze(obj, {}, 0, 0)
+        frozen = _freeze(obj, global_config, {}, 0, 0)
         if frozen[1]:
             pprint.pprint(obj, width=1000)
             pprint.pprint(frozen, width=1000)
@@ -62,11 +63,10 @@ def test_freeze_total_uniqueness(input_kind: str) -> None:
     values = non_equivalents[input_kind]
     frozen_values = [(value, freeze(value)) for value in values]
     for i, (this_value, this_freeze) in enumerate(frozen_values):
-        for j, (that_value, that_freeze) in enumerate(frozen_values):
+        for j, (_, that_freeze) in enumerate(frozen_values):
             if i != j:
                 if this_freeze == that_freeze:
                     print(f"freeze({this_value!r}) = {pprint.pformat(this_freeze)}")
-                    print(f"freeze({that_value!r}) = {pprint.pformat(that_freeze)}")
                 assert this_freeze != that_freeze
 
 
@@ -140,7 +140,7 @@ def test_freeze_has_instance_methods() -> None:
             return "foo"
     assert "foo" in repr(freeze(A))
     assert "foo" in repr(freeze(A()))
-    def stuff(self) -> str:
+    def stuff() -> str:
         return "bar"
     assert "bar" in repr(freeze(stuff))
 
@@ -161,16 +161,5 @@ def test_logs(caplog: pytest.LogCaptureFixture) -> None:
 
 
 def test_recursion_limit() -> None:
-    old_recursion_limit = config.recursion_limit
-    config.recursion_limit = 2
     with pytest.raises(FreezeRecursionError):
-        freeze([[[[[["hi"]]]]]])
-    config.recursion_limit = old_recursion_limit
-
-
-def test_config_wrong_attr() -> None:
-    # Real attributes should work
-    old_recursion_limit = config.recursion_limit
-    config.recursion_limit = old_recursion_limit
-    with pytest.raises(AttributeError):
-        config.attr_does_not_exist = 4
+        freeze([[[[[["hi"]]]]]], Config(recursion_limit=2))

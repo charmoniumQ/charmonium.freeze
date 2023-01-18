@@ -122,7 +122,6 @@ def getclosurevars(func: types.FunctionType) -> inspect.ClosureVars:
         var: cell.cell_contents
         for var, cell in zip(func.__code__.co_freevars, func.__closure__ or [])
     }
-    local_varnames = set(func.__code__.co_varnames)
     global_vars = {}
     builtin_vars = {}
     global_ns = func.__globals__

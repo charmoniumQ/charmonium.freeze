@@ -101,34 +101,37 @@ It even works on custom types.
 >>> s.attr = 4
 >>> pprint(freeze(s))
 (b'pickle',
- (b'__newobj__',
-  (((b'class',
-     'Struct',
-     (('frobnicate',
-       (b'function',
-        b'code',
-        'frobnicate',
-        b't\x00d\x01\x83\x01\x01\x00d\x00S\x00',
-        (None, 123))),)),
-    (b'class', 'builtins.object')),)),
- (('attr', 4),))
+ b'__newobj__',
+ ((b'class',
+   'Struct',
+   (('frobnicate',
+     (b'function',
+      'frobnicate',
+      b't\x00d\x01\x83\x01\x01\x00d\x00S\x00',
+      (None, 123))),),
+   b'class',
+   'builtins.object'),),
+ ('attr', 4))
 
 And methods, functions, lambdas, etc.
 
 >>> pprint(freeze(lambda x: x + 123))
-(b'function', b'code', '<lambda>', b'|\x00d\x01\x17\x00S\x00', (None, 123))
+(b'function', '<lambda>', b'|\x00d\x01\x17\x00S\x00', (None, 123))
 >>> import functools
 >>> pprint(freeze(functools.partial(print, 123)))
 (b'pickle',
- (((b'class',
-    'partial',
-    ...),
-   (b'class', 'builtins.object')),
-  (('builtin func', 'print'),)),
- (('builtin func', 'print'), (123,), (), None))
+ b'class',
+ 'partial',
+ ...,
+ b'class',
+ 'builtins.object',
+ ('builtin func', 'print'),
+ ('builtin func', 'print'),
+ (123,),
+ (),
+ None)
 >>> pprint(freeze(Struct.frobnicate))
 (b'function',
- b'code',
  'frobnicate',
  b't\x00d\x01\x83\x01\x01\x00d\x00S\x00',
  (None, 123))
@@ -139,8 +142,10 @@ And methods, functions, lambdas, etc.
 ... 
 >>> pprint(freeze(square_plus_i))
 (b'function',
- (b'code', 'square_plus_i', b'|\x00d\x01\x13\x00t\x00\x17\x00S\x00', (None, 2)),
- (('i', 0),))
+ 'square_plus_i',
+ b'|\x00d\x01\x13\x00t\x00\x17\x00S\x00',
+ (None, 2),
+ ('i', 0))
 
 If the source code of ``square_plus_i`` changes between successive invocations,
 then the ``freeze`` value will change. This is useful for caching unchanged
@@ -174,8 +179,9 @@ Special cases
     >>> s.attr = 4
     >>> pprint(freeze(s))
     (b'pickle',
-     (b'__newobj__', (((b'class', 'Struct', ()), (b'class', 'builtins.object')),)),
-     (('attr', 4),))
+     b'__newobj__',
+     ((b'class', 'Struct', (), b'class', 'builtins.object'),),
+     ('attr', 4))
     >>> # which is based on the Pickle protocol's definition of `__reduce__`:
     >>> pprint(s.__reduce__())
     (<function _reconstructor at 0x...>,
@@ -183,19 +189,33 @@ Special cases
      {'attr': 4})
 
 
+  - Otherwise, you can ignore certain attributes by creating a ``Config``
+    object. See the source code of ``charmonium/freeze/config.py`` for more
+    details.
+
+    >>> from charmonium.freeze import freeze, Config
+    >>> class Test:
+    ...     deterministic_val = 3
+    ...     nondeterministic_val = 4
+    ... 
+    >>> config = Config()
+    >>> config.ignore_attributes.add(("__main__", "Test", "nondeterministic_val"))
+    >>> freeze(Test(), config)
+    (b'pickle', b'__newobj__', ((b'class', 'Test', (('deterministic_val', 3),), b'class', 'builtins.object'),))
+
+    Note that ``nondeterministic_val`` is not present in the frozen object.
+
+
   - If you cannot tweak the definition of the class or monkeypatch a
     ``__getfrozenstate__`` method, you can still register `single dispatch
     handler`_ for that type:
 
     >>> from typing import Hashable, Optional, Dict, Tuple
-    >>> from charmonium.freeze import freeze, _freeze_dispatch, _freeze
-    >>> class Test:
-    ...     deterministic_val = 3
-    ...     nondeterministic_val = 4
-    ... 
+    >>> from charmonium.freeze import _freeze_dispatch, _freeze
     >>> @_freeze_dispatch.register(Test)
     ... def _(
     ...         obj: Test,
+    ...         config: Config,
     ...         tabu: Dict[int, Tuple[int, int]],
     ...         level: int,
     ...         index: int,
@@ -240,6 +260,11 @@ Special cases
   (('a', 1), ('b', 2))
   >>> freeze({"b": 2, "a": 1})
   (('b', 2), ('a', 1))
+
+  This behavior is controllable by ``Config.ignore_dict_order``, which emits a ``frozenset`` of pairs.
+
+  >>> freeze({"b": 2, "a": 1}, Config(ignore_dict_order=True))
+  frozenset({('a', 1), ('b', 2)})
 
 .. _`pickle protocol`: https://docs.python.org/3/library/pickle.html#pickling-class-instances
 .. _`single dispatch handler`: https://docs.python.org/3/library/functools.html#functools.singledispatch
@@ -339,13 +364,13 @@ TODO
 
   - ☑ Use user-customizable multidispatch.
   - ☑ Make it easier to register a freeze method for a type.
-  - ☑ Encapsulate global config `freeze` into object.
-  - ☐ Make freeze object-oriented with a module-level instance, like `random.random` and `random.Random`.
+  - ☑ Encapsulate global config into object.
+  - ☑ Make freeze object-oriented with a module-level instance, like ``random.random`` and ``random.Random``.
     - This makes it easier for different callers to have their own configuration options.
-    - ☐ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what `charmonium.determ_hash` does.
+    - ☐ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what ``charmonium.determ_hash`` does. Use this configuration in ``charmonium.cache``.
   - ☐ Move "get call graph" into its own package.
   - ☐ Document configuration options.
-  - ☐ Document `summarize_diff` and `iterate_diffs`.
+  - ☐ Document ``summarize_diff`` and ``iterate_diffs``.
 
 - ☑ Make ``freeze`` handle more types:
 
@@ -366,3 +391,4 @@ TODO
   - ☑ Memoize the hash of immutable data:
     - If function contains no locals or globals except other immutables, it is immutable.
     - If a collection is immutable and contains only immutables, it is immutable.
+  - ☐ Consider deprecating ``combine_frozen``.

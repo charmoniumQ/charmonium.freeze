@@ -4,7 +4,8 @@ import io
 import pickle
 from typing import Any, Dict, Hashable, Optional, Tuple
 
-from .lib import UnfreezableTypeError, _freeze, freeze_dispatch
+from .lib import UnfreezableTypeError, freeze_dispatch
+from .config import Config
 
 try:
     import numpy
@@ -15,26 +16,12 @@ else:
     @freeze_dispatch.register(numpy.ndarray)
     def _(
         obj: numpy.typing.NDArray[Any],
+        config: Config,
         tabu: Dict[int, Tuple[int, int]],
         depth: int,
         index: int,
     ) -> Tuple[Hashable, bool, Optional[int]]:
         return ("numpy.ndarray", obj.tobytes(), str(obj.dtype)), False, None
-
-
-# TODO: use config.ignore_attributes instead.
-try:
-    import tqdm  # noqa: autoimport
-except ImportError:
-    pass
-else:
-
-    @freeze_dispatch.register(tqdm.tqdm)
-    def _(
-        obj: tqdm.tqdm[Any], tabu: Dict[int, Tuple[int, int]], depth: int, index: int
-    ) -> Tuple[Hashable, bool, Optional[int]]:
-        # Unfortunately, the tqdm object contains the timestamp of the last ping, which would result in a different state every time.
-        return _freeze(obj.iterable, tabu, depth, index)
 
 
 try:
@@ -46,9 +33,10 @@ else:
     @freeze_dispatch.register
     def _(
         obj: matplotlib.figure.Figure,
-        tabu: Dict[int, Tuple[int, int]],
-        depth: int,
-        index: int,
+        _config: Config,
+        _tabu: Dict[int, Tuple[int, int]],
+        _depth: int,
+        _index: int,
     ) -> Tuple[Hashable, bool, Optional[int]]:
         file = io.BytesIO()
         obj.savefig(file, format="raw")
@@ -66,6 +54,7 @@ else:
     @freeze_dispatch.register(pandas.Index)  # type: ignore
     def _(
         obj: Any,
+        config: Config,
         tabu: Dict[int, Tuple[int, int]],
         depth: int,
         index: int,
@@ -83,7 +72,7 @@ else:
 
     @freeze_dispatch.register
     def _(
-        obj: pymc3.Model, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+            obj: pymc3.Model, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
     ) -> Tuple[Hashable, bool, Optional[int]]:
         raise UnfreezableTypeError(
             "pymc3.Model has been known to cause problems due to its not able to be pickled."

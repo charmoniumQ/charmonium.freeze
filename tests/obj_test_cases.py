@@ -12,7 +12,7 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
-from typing import Any, Generator, Generic, List, Mapping, Type, TypeVar, cast
+from typing import Any, Generator, Generic, List, Mapping, Type, TypeVar, cast, Iterator
 
 import matplotlib.figure
 import numpy
@@ -52,7 +52,7 @@ class WithGetFrozenState:
     def __init__(self, value: int) -> None:
         self._value = value
 
-    def __getfrozenstate__(self) -> int:  # pylint: disable=no-self-use
+    def __getfrozenstate__(self) -> int:
         return 0
 
 
@@ -89,14 +89,14 @@ def function_test(obj: int) -> int:
 
 
 def get_class(i: int) -> Type[Any]:
-    class A:
+    class D:
         i: int = 0
 
         def foo(self) -> int:
             return self.i
 
-    A.i = i
-    return A
+    D.i = i
+    return D
 
 
 class ClassWithStaticMethod:
@@ -117,21 +117,15 @@ global1 = 1
 readme_rpb = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb.seek(10)
 
+def generator(max_elems: int, some_state_var: int) -> Generator[int, None, None]:
+    yield from range(max_elems)
+    some_state_var = some_state_var + 1
 
-def generator(a: int) -> Generator[int, None, None]:
-    for i in range(2):
-        yield i
-    yield from range(2)
-    yield a
-
-
-generator_length = 5
-generators = [generator(123) for i in range(generator_length)]
-generators.append(generator(456))
-for i, this_generator in enumerate(generators):
-    for _j in range(i):
-        next(this_generator)
-context_manager = contextlib.contextmanager(generator(2))  # type: ignore
+def get_generator(max_elems: int, current_pos: int, some_state_var: int) -> Iterator[int]:
+    ret = generator(max_elems, some_state_var)
+    for _ in range(current_pos):
+        next(ret)
+    return ret
 
 range10p1 = iter(range(10))
 next(range10p1)
@@ -160,9 +154,15 @@ non_equivalents: Mapping[str, Any] = {
     "module": [zlib, pickle],
     "range": [range(10), range(20)],
     "iterator": [iter(range(10)), range10p1],
-    # TODO: fix generators
-    # "generator": generators,
-    # "context manager": [context_manager],
+    "generator": [
+        get_generator(10, 0, 0),
+        get_generator(10, 1, 0),
+        get_generator(10, 1, 1),
+    ],
+    "context manager": [
+        contextlib.contextmanager(generator)(1, 0),
+        contextlib.contextmanager(generator)(1, 1),
+    ],
     "logger": [logging.getLogger("a.b"), logging.getLogger("a.c")],
     "type": [List[int], List[float], ClassWithStaticMethod],
     "slotted object": [WithSlots(1, 2), WithSlots(1, 3)],
@@ -204,7 +204,7 @@ non_equivalents: Mapping[str, Any] = {
     "Path": [Path(), Path("abc"), Path("def")],
     "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4, dtype=int), numpy.ones(4)],
     "obj with properties": [WithProperties(3), WithProperties(4)],
-    "tqdm": [tqdm(range(10), disable=True)],
+    "tqdm": [tqdm(range(10), disable=True), tqdm(range(20), disable=True)],
     "pandas.DataFrame": [
         pandas.DataFrame(data={"col1": [1, 2], "col2": [3, 4]}),
         pandas.DataFrame(data={"col1": [1, 3], "col2": [5, 4]}),  # change data
@@ -220,8 +220,7 @@ non_equivalents: Mapping[str, Any] = {
     "timedelta": [datetime.timedelta(days=3), datetime.timedelta(days=4)],
     "datetime": [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 1, 1, 1)],
     "locky objects": [threading.Lock(), threading.RLock()],
-    # TODO: uncomment this
-    # "cycle to different thing": [TreeNode.cycle_a(), TreeNode.cycle_b()],
+    "cycle to different thing": [TreeNode.cycle_a(), TreeNode.cycle_b()],
 }
 
 
@@ -233,6 +232,8 @@ non_copyable_types = {
     "io.BufferedRandom",
     "tqdm",
     "locky objects",
+    "generator",
+    "context manager",
 }
 
 
@@ -278,6 +279,7 @@ equivalents: Mapping[str, List[Any]] = {
     "threading.Lock": [threading.Lock(), threading.Lock()],
     "threading.RLock": [threading.RLock(), threading.RLock()],
     "timedelta": [datetime.timedelta(seconds=120), datetime.timedelta(minutes=2)],
+    "tqdm": [tqdm(range(10), disable=True), tqdm(range(10), disable=True)],
 }
 
 # pylint: disable=consider-using-with
@@ -300,7 +302,7 @@ class AChild(A, Generic[T]):
 
 class B:
     # mutable because of x
-    x = 3
+    x = [3]
 
 
 class BChild(B):

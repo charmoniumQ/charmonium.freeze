@@ -5,22 +5,21 @@ import logging
 import re
 import textwrap
 import types
-from dataclasses import dataclass, field, fields
-from pathlib import Path
 from typing import (
     Any,
+    Collection,
     Dict,
     Hashable,
     List,
     Mapping,
     Optional,
-    Sequence,
-    Set,
     Tuple,
     cast,
 )
 
-from .util import Ref
+
+from .config import Config, global_config
+
 
 logger = logging.getLogger("charmonium.freeze")
 
@@ -37,157 +36,12 @@ class FreezeRecursionError(FreezeError):
     pass
 
 
-@dataclass
-class Config:
-    def __setattr__(self, attr: str, val: Any) -> None:
-        if attr in {field.name for field in fields(self.__class__)}:
-            object.__setattr__(self, attr, val)
-        else:
-            raise AttributeError(f"{attr} does not exist on {self.__class__.__name__}")
-
-    recursion_limit: Optional[int] = 150
-
-    # Put ``(module, global_name)`` of which never change or whose changes do
-    # not affect the result computation here (e.g. global caches). This will not
-    # attempt to freeze their state.
-    ignore_globals: Set[Tuple[str, str]] = field(default_factory=lambda: {
-        # tempdir caches the name of the temporary directory on this platorm.
-        ("tempfile", "tempdir"),
-        # thread status variables don't directly affect computation.
-        ("threading", "_active"),
-        ("threading", "_limbo"),
-        ("re", "_cache"),
-        ("charmonium.freeze.lib", "memo"),
-        ("sys", "modules"),
-        ("sys", "path"),
-        ("linecache", "cache"),
-        ("inspect", "_filesbymodname"),
-        ("inspect", "modulesbyfile"),
-        ("sre_compile", "compile"),
-        ("os", "environ"),
-    })
-
-    # Put ``(function.__module__, function.__name__, nonlocal_name)`` of
-    # nonlocal variables which never change or whose changes do not affect the
-    # result computation here, (e.g. caches). This will not attempt to freeze
-    # their state. Note that the module and name may be different than the
-    # identifier you use to import the function. Use ``function.__module__`` and
-    # ``function.__name__`` to be sure.
-    ignore_nonlocals: Set[Tuple[str, str, str]] = field(default_factory=lambda: {
-        # Special case for functools.single_dispatch: We need to ignore the
-        # following non-locals, as their mutation do not affect the actual
-        # computation.
-        ("functools", "dispatch", "cache_token"),
-        ("functools", "dispatch", "dispatch_cache"),
-    })
-
-    # Put paths to source code that whose source code never changes or those
-    # changes do not affect the result computation. I will still recurse into
-    # the closure of these functions, just not its source code though.
-    ignore_files: Set[Path] = field(default_factory=lambda: {
-        # add the stdlib
-        Path(functools.__file__).parent,
-    })
-
-    # Whether to assume that all code is constant
-    ignore_all_code: bool = False
-
-    # Put ``(object.__module__, object.__class__.__name__, attribute)`` of
-    # object attributes which never change or whose changes do not affect the
-    # result computation here (e.g. cached attributes). This will not attempt to
-    # freeze their state. Note that the module may be different than the name
-    # you import it as. Use ``object.__module__`` to be sure.
-    ignore_attributes: Set[Tuple[str, str, str]] = field(default_factory=lambda: {
-        ("pandas.core.internals.blocks", "Block", "_cache"),
-    })
-
-    # Put ``(object.__module__, object.__class__.__name__)`` of objects which do
-    # not affect the result computation here (e.g. caches, locks, and
-    # threads). Use ``object.__module__`` and ``object.__class__.__name__`` to
-    # be sure.
-    ignore_objects_by_class: Set[Tuple[str, str]] = field(default_factory=lambda: {
-        ("builtins", "_abc_data"),
-        ("_abc", "_abc_data"),
-        ("_thread", "RLock"),
-        ("_thread", "LockType"),
-        ("_thread", "lock"),
-        ("_thread", "_local"),
-        ("threading", "local"),
-        ("multiprocessing.synchronize", "Lock"),
-        ("multiprocessing.synchronize", "RLock"),
-        ("builtins", "weakref"),
-        ("builtins", "PyCapsule"),
-        ("weakref", "WeakKeyDictionary"),
-        ("weakref", "WeakValueDictionary"),
-        ("weakref", "WeakSet"),
-        ("weakref", "KeyedRef"),
-        ("weakref", "WeakMethod"),
-        ("weakref", "ReferenceType"),
-        ("weakref", "ProxyType"),
-        ("weakref", "CallableProxyType"),
-        ("_weakrefset", "WeakSet"),
-        ("threading", "Thread"),
-        ("threading", "Event"),
-        ("threading", "_DummyThread"),
-        ("threading", "Condition"),
-        ("typing", "Generic"),
-        ("re", "RegexFlag"),
-        # see https://github.com/python/cpython/issues/92049
-        ("sre_constants", "_NamedIntConstant"),
-        # TODO: Remove these when we have caching
-        # They are purely performance (not correctness)
-        ("pandas.core.dtypes.base", "Registry"),
-    })
-
-    # Put ``id(object)`` of objects which do not affect the result computation
-    # here, especially those which mutate or are not picklable. Prefer to use
-    # ``config.ignore_objects_by_class`` if applicable.
-    ignore_objects_by_id: Set[int] = field(default_factory=set)
-
-    # Whether to ignore all classes
-    ignore_all_classes: bool = False
-
-    # Put ``(class.__module__, class.__name__)`` of classes whose source code
-    # and class attributes never change or those changes do not affect the
-    # result computation.
-    ignore_classes: Set[Tuple[str, Optional[str]]] = field(default_factory=lambda: {
-        # TODO[research]: Remove these when we have caching
-        # They are purely performance (not correctness)
-        ("pathlib", "PurePath"),
-        ("builtins", None),
-        ("ABC", None),
-        ("ABCMeta", None),
-        ("_operator", None),
-        ("numpy", "ndarray"),
-        ("pandas.core.frame", "DataFrame"),
-        ("pandas.core.series", "Series"),
-        ("pandas.core.indexes.base", "Index"),
-        ("matplotlib.figure", "Figure"),
-        ("tqdm.std", "tqdm"),
-        ("re", "RegexFlag"),
-        ("typing", "Generic"),
-    })
-
-    # Put ``(function.__module__, function.__name__)`` of functions whose source
-    # code and class attributes never change or those changes are not relevant
-    # to the resulting computation.
-    ignore_functions: Set[Tuple[str, str]] = field(default_factory=set)
-
-    ignore_extensions: bool = True
-
-    ignore_dict_order: bool = False
-
-    log_width: int = 250
-
-
-config = Config()
-
-
-def freeze(obj: Any) -> Hashable:
+def freeze(obj: Any, config: Optional[Config] = None) -> Hashable:
     "Injectively, deterministically maps objects to hashable, immutable objects."
     logger.debug("freeze begin %r", obj)
-    is_mutable = Ref(True)
-    ret = _freeze(obj, {}, 0, 0)[0]
+    if config is None:
+        config = global_config
+    ret = _freeze(obj, config, {}, 0, 0)[0]
     logger.debug("freeze end")
     return ret
 
@@ -218,11 +72,9 @@ permanent_types = (
     type,
 )
 
-memo: Dict[int, Hashable] = {}
-
 
 def _freeze(
-    obj: Any, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: Any, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     # Check recursion limit
     if config.recursion_limit is not None and depth > config.recursion_limit:
@@ -238,7 +90,6 @@ def _freeze(
                 textwrap.shorten(repr(obj), width=config.log_width),
             )
         else:
-            target = freeze_dispatch.dispatch(type(obj))
             logger.debug(
                 "%s %s %s",
                 indent,
@@ -258,9 +109,9 @@ def _freeze(
         return type_pair, True, None
 
     # Check memo
-    if id(obj) in memo:
+    if id(obj) in config.memo:
         logger.debug("%s memo hit for %d", indent, id(obj))
-        cached_result = memo[id(obj)]
+        cached_result = config.memo[id(obj)]
         return cached_result, True, None
 
     # Check tabu
@@ -288,11 +139,11 @@ def _freeze(
     # Ok, no more tricks; actually do the work.
     if not isinstance(obj, untabuable_types):
         tabu[id(obj)] = (depth, index)
-    ret, is_immutable, ref_depth = freeze_dispatch(obj, tabu, depth + 1, 0)
+    ret, is_immutable, ref_depth = freeze_dispatch(obj, config, tabu, depth + 1, 0)
     if not isinstance(obj, untabuable_types):
         del tabu[id(obj)]
 
-    # TODO: Look at ref_depth here.
+    # TODO[1]: Look at ref_depth here.
     # Suppose obj1 -> obj2, obj2 -> obj1 and obj1prime -> obj2.
     # freeze(obj1)      = [("data", obj1     .data), ("children", [("data", obj2.data, ("children", [("cycle", 1, 0)]))])]
     # freeze(obj2)      = [("data", obj1     .data), ("children", [("data", obj2.data, ("children", [("cycle", 1, 0)]))])]
@@ -308,15 +159,19 @@ def _freeze(
         and isinstance(obj, permanent_types)
         and not isinstance(obj, types.LambdaType)
     ):
-        memo[id(obj)] = ret
+        config.memo[id(obj)] = ret
     return ret, is_immutable, ref_depth
 
 
 @functools.singledispatch
 def freeze_dispatch(
-    obj: Any, tabu: dict[int, Tuple[int, int]], depth: int, index: int
+    obj: Any, _config: Config, _tabu: dict[int, Tuple[int, int]], _depth: int, _index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    raise NotImplementedError
+    ty = type(obj).__name__
+    raise NotImplementedError(
+        f"charmonium.freeze is not implemented for {ty}."
+        "See <https://github.com/charmoniumQ/charmonium.time_block/blob/master/README.rst> for how to add a new type."
+    )
 
 
 def min_with_none_inf(x: Optional[int], y: Optional[int]) -> Optional[int]:
@@ -330,18 +185,31 @@ def min_with_none_inf(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 def freeze_sequence(
-    obj: Sequence[Any],
+    obj: Collection[Any],
     obj_is_immutable: bool,
     order_matters: bool,
+    config: Config,
     tabu: Dict[int, Tuple[int, int]],
     depth: int,
-    index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    """Freeze a sequence by freezing each element.
+
+    obj_is_immutable: pass True if the container you are seeking to
+       freeze should be considered "immutable", which is that it will
+       not change during the program's execution (e.g., tuple). This
+       determiniation permits caching its hash over the lifetime of
+       the process. This function will still check that each element
+       in the tuple is also immutable before declaring the result
+       immutable (e.g., ([]) is not immutable).
+
+    order_matters: pass True if the object's order matters (e.g., for [] but not for set()).
+
+    """
     all_is_immutable = obj_is_immutable
     all_min_ref = None
     frozen_elems: List[Any] = [None] * len(obj)
     for index, elem in enumerate(obj):
-        frozen_elem, is_immutable, min_ref = _freeze(elem, tabu, depth, index)
+        frozen_elem, is_immutable, min_ref = _freeze(elem, config, tabu, depth, index)
         frozen_elems[index] = frozen_elem
         all_is_immutable = all_is_immutable and is_immutable
         all_min_ref = min_with_none_inf(all_min_ref, min_ref)
@@ -357,19 +225,30 @@ un_reassignable_types = (type, types.FunctionType, types.ModuleType)
 def freeze_attrs(
     obj: Mapping[str, Any],
     obj_is_immutable: bool,
+    write_attrs: bool,
+    config: Config,
     tabu: Dict[int, Tuple[int, int]],
     depth: int,
-    index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    """Freeze an Mapping[str, Any], by freezing each element.
+
+    obj_is_immutable: See the same argument in freeze_sequence.
+
+    write_attrs: Set to True to write the attributes in the frozen
+        result. Otherwise, we can assume that other objects will have
+        the same attribute keys. E.g., if freeze_functions always
+        freezes an object like {"code": <code>, "name": <name>}, then
+        we don't need to write "code" and "name".
+
+    """
     all_min_ref = None
     all_is_immutable = obj_is_immutable
     frozen_items: List[Tuple[str, Any]] = [("", None)] * len(obj)
     # sorted so we iterate over the members in a consistent order.
     for index, (key, val) in enumerate(sorted(obj.items())):
         logger.debug("%s %s", " " * depth, key)
-        frozen_val, _, min_ref = _freeze(val, tabu, depth, index)
+        frozen_val, is_immutable, min_ref = _freeze(val, config, tabu, depth, index)
         frozen_items[index] = (key, frozen_val)
-        is_immutable = isinstance(val, un_reassignable_types)
         if min_ref is not None:
             all_min_ref = min_with_none_inf(min_ref, all_min_ref)
         all_is_immutable = all_is_immutable and is_immutable
@@ -379,8 +258,12 @@ def freeze_attrs(
 def combine_frozen(
     t0: Tuple[Hashable, bool, Optional[int]], t1: Tuple[Hashable, bool, Optional[int]]
 ) -> Tuple[Tuple[Hashable, ...], bool, Optional[int]]:
+    if isinstance(t0[0], tuple) and isinstance(t1[0], tuple):
+        ret = (*t0[0], *t1[0])
+    else:
+        ret = (t0[0], t1[0])
     return (
-        (t0[0], t1[0]),
+        ret,
         t0[1] and t1[1],
         min_with_none_inf(t0[2], t1[2]),
     )

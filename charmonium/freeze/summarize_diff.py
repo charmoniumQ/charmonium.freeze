@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import dataclasses
 import pprint
-from typing import Any, FrozenSet, Hashable, Iterable, Tuple, TypeVar, cast
+from typing import Any, FrozenSet, Hashable, Iterable, Tuple, TypeVar, Optional, cast
 
 from .lib import freeze
+from .config import Config
 from .util import common_prefix
 
 _T = TypeVar("_T")
@@ -39,8 +40,8 @@ class ObjectLocation:
         self.objects = (*self.objects[:-1], obj)
 
 
-def summarize_diff(obj0: Any, obj1: Any) -> str:
-    return summarize_diff_of_frozen(freeze(obj0), freeze(obj1))
+def summarize_diff(obj0: Any, obj1: Any, config: Optional[Config] = None) -> str:
+    return summarize_diff_of_frozen(freeze(obj0, config), freeze(obj1, config))
 
 
 def summarize_diff_of_frozen(obj0: Hashable, obj1: Hashable) -> str:

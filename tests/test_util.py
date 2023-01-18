@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import os
@@ -19,6 +20,8 @@ def get_function() -> types.FunctionType:
         default_arg: Any = 3,
         **kwargs: Any,
     ) -> None:
+        # pylint: disable=pointless-statement,unused-variable
+
         # handle naked arg
         y
 
@@ -32,7 +35,7 @@ def get_function() -> types.FunctionType:
         default_arg.to_bytes
 
         # handle args
-        args.__len__()
+        args.foo()
 
         # Handle kwargs
         kwargs.items()
