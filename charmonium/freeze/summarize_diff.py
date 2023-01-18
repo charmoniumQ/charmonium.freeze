@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import dataclasses
 import pprint
-from typing import Any, FrozenSet, Hashable, Iterable, Tuple, TypeVar, Optional, cast
+from typing import Any, FrozenSet, Hashable, Iterable, Optional, Tuple, TypeVar, cast
 
-from .lib import freeze
 from .config import Config
+from .lib import freeze
 from .util import common_prefix
 
 _T = TypeVar("_T")

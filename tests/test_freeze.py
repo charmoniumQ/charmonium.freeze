@@ -20,11 +20,11 @@ from obj_test_cases import (
 )
 
 from charmonium.freeze import (
+    Config,
     FreezeRecursionError,
     UnfreezableTypeError,
-    Config,
-    global_config,
     freeze,
+    global_config,
     summarize_diff_of_frozen,
 )
 from charmonium.freeze.lib import _freeze
@@ -138,10 +138,13 @@ def test_freeze_has_instance_methods() -> None:
     class A:
         def stuff(self) -> str:
             return "foo"
+
     assert "foo" in repr(freeze(A))
     assert "foo" in repr(freeze(A()))
+
     def stuff() -> str:
         return "bar"
+
     assert "bar" in repr(freeze(stuff))
 
 

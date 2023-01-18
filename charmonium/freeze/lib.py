@@ -5,21 +5,9 @@ import logging
 import re
 import textwrap
 import types
-from typing import (
-    Any,
-    Collection,
-    Dict,
-    Hashable,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    cast,
-)
-
+from typing import Any, Collection, Dict, Hashable, List, Mapping, Optional, Tuple, cast
 
 from .config import Config, global_config
-
 
 logger = logging.getLogger("charmonium.freeze")
 
@@ -165,7 +153,11 @@ def _freeze(
 
 @functools.singledispatch
 def freeze_dispatch(
-    obj: Any, _config: Config, _tabu: dict[int, Tuple[int, int]], _depth: int, _index: int
+    obj: Any,
+    _config: Config,
+    _tabu: dict[int, Tuple[int, int]],
+    _depth: int,
+    _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     ty = type(obj).__name__
     raise NotImplementedError(

@@ -4,8 +4,8 @@ import io
 import pickle
 from typing import Any, Dict, Hashable, Optional, Tuple
 
-from .lib import UnfreezableTypeError, freeze_dispatch
 from .config import Config
+from .lib import UnfreezableTypeError, freeze_dispatch
 
 try:
     import numpy
@@ -72,7 +72,11 @@ else:
 
     @freeze_dispatch.register
     def _(
-            obj: pymc3.Model, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+        obj: pymc3.Model,
+        config: Config,
+        tabu: Dict[int, Tuple[int, int]],
+        depth: int,
+        index: int,
     ) -> Tuple[Hashable, bool, Optional[int]]:
         raise UnfreezableTypeError(
             "pymc3.Model has been known to cause problems due to its not able to be pickled."

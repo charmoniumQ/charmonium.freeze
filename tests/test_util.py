@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import os
@@ -35,7 +34,7 @@ def get_function() -> types.FunctionType:
         default_arg.to_bytes
 
         # handle args
-        args.foo()
+        args.__len__()
 
         # Handle kwargs
         kwargs.items()

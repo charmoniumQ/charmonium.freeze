@@ -12,7 +12,7 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
-from typing import Any, Generator, Generic, List, Mapping, Type, TypeVar, cast, Iterator
+from typing import Any, Generator, Generic, Iterator, List, Mapping, Type, TypeVar, cast
 
 import matplotlib.figure
 import numpy
@@ -117,15 +117,20 @@ global1 = 1
 readme_rpb = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb.seek(10)
 
+
 def generator(max_elems: int, some_state_var: int) -> Generator[int, None, None]:
     yield from range(max_elems)
     some_state_var = some_state_var + 1
 
-def get_generator(max_elems: int, current_pos: int, some_state_var: int) -> Iterator[int]:
+
+def get_generator(
+    max_elems: int, current_pos: int, some_state_var: int
+) -> Iterator[int]:
     ret = generator(max_elems, some_state_var)
     for _ in range(current_pos):
         next(ret)
     return ret
+
 
 range10p1 = iter(range(10))
 next(range10p1)

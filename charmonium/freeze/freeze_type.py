@@ -3,8 +3,8 @@ from __future__ import annotations
 import types
 from typing import Any, Dict, Hashable, Optional, Tuple, Type
 
-from .lib import _freeze, combine_frozen, freeze_attrs, freeze_dispatch, logger
 from .config import Config
+from .lib import _freeze, combine_frozen, freeze_attrs, freeze_dispatch, logger
 
 
 @freeze_dispatch.register(type)
@@ -73,21 +73,33 @@ def _(
 
 @freeze_dispatch.register(classmethod)
 def _(
-    obj: classmethod[Any], config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: classmethod[Any],
+    config: Config,
+    tabu: Dict[int, Tuple[int, int]],
+    depth: int,
+    index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     return _freeze(obj.__func__, config, tabu, depth - 1, index)
 
 
 @freeze_dispatch.register
 def _(
-    obj: types.MethodType, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: types.MethodType,
+    config: Config,
+    tabu: Dict[int, Tuple[int, int]],
+    depth: int,
+    index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     return _freeze((obj.__self__, obj.__func__), config, tabu, depth - 1, index)
 
 
 @freeze_dispatch.register
 def _(
-        obj: property, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, _index: int
+    obj: property,
+    config: Config,
+    tabu: Dict[int, Tuple[int, int]],
+    depth: int,
+    _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     ret: tuple[Hashable, bool, Optional[int]] = (), True, None
     ret = combine_frozen(ret, _freeze(obj.fget, config, tabu, depth, 0))
@@ -103,6 +115,6 @@ def _(
 @freeze_dispatch.register(types.GetSetDescriptorType)
 @freeze_dispatch.register(types.MemberDescriptorType)
 def _(
-        obj: Any, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+    obj: Any, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
     return (obj.__class__.__name__.encode(), obj.__name__), True, None

@@ -1,9 +1,10 @@
 from typing import Any
+
+from charmonium.freeze import Config
 from charmonium.freeze import ObjectLocation as OL
-from charmonium.freeze import Config, freeze
+from charmonium.freeze import freeze
 from charmonium.freeze import iterate_diffs_of_frozen as idof
 from charmonium.freeze import summarize_diff
-
 
 config = Config(ignore_dict_order=True)
 obj0 = freeze([0, 1, 2, {3, 4}, {"a": 5, "b": 6, "c": 7}, 8], config)
