@@ -189,8 +189,9 @@ Special cases
      {'attr': 4})
 
 
-  - Otherwise, you can ignore certain attributes by creating a ``Config``
-    object. See the source code of ``charmonium/freeze/config.py`` for more
+  - Otherwise, you can ignore certain attributes by creating a
+    ``Config`` object or modifying the ``global_config`` object. See
+    the source code of ``charmonium/freeze/config.py`` for more
     details.
 
     >>> from charmonium.freeze import freeze, Config
@@ -263,8 +264,9 @@ Special cases
 
   This behavior is controllable by ``Config.ignore_dict_order``, which emits a ``frozenset`` of pairs.
 
-  >>> freeze({"b": 2, "a": 1}, Config(ignore_dict_order=True))
-  frozenset({('a', 1), ('b', 2)})
+  >>> config = Config(ignore_dict_order=True)
+  >>> freeze({"b": 2, "a": 1}, config) == freeze({"a": 1, "b": 2}, config)
+  True
 
 .. _`pickle protocol`: https://docs.python.org/3/library/pickle.html#pickling-class-instances
 .. _`single dispatch handler`: https://docs.python.org/3/library/functools.html#functools.singledispatch
