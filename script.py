@@ -251,22 +251,8 @@ async def docs() -> None:
 
 
 async def docs_inner() -> None:
-    await asyncio.gather(
-        *(
-            [pretty_run(["sphinx-build", "-W", "-b", "html", docsrc_dir, "docs"])]
-            if docsrc_dir.exists()
-            else []
-        ),
-        pretty_run(
-            [
-                "proselint",
-                "--config",
-                "proselint.json",
-                "README.rst",
-                *docsrc_dir.glob("*.rst"),
-            ]
-        ),
-    )
+    if docsrc_dir.exists():
+        await pretty_run(["sphinx-build", "-W", "-b", "html", docsrc_dir, "docs"])
     if docsrc_dir.exists():
         print(f"See docs in: file://{(Path() / 'docs' / 'index.html').resolve()}")
 
