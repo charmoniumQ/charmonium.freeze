@@ -347,6 +347,8 @@ TODO
 
 - ☑ Bring hash into separate package.
 
+- ☐ Bring object-diff into separate package.
+
 - ☐ Correctness
 
   - ☑ Test hashing sets with different orders. Assert tests fail.
