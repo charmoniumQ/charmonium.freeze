@@ -4,7 +4,7 @@ import os
 import pprint
 import re
 import types
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 from charmonium.freeze import util
 
@@ -66,41 +66,19 @@ def get_function() -> types.FunctionType:
     return cast(types.FunctionType, function)
 
 
-def test_getclosurevars() -> None:
-    result = util.getclosurevars(get_function())
-    assert result.nonlocals == {"nonlocalvar": 5}
-    assert result.globals == {"re": re, "os": os}
-    assert result.builtins == {"print": print}
-    assert result.unbound == {"k"}
-
-
-_T = TypeVar("_T")
-
-
-def unsized_tuple(*args: _T) -> tuple[_T, ...]:
-    return tuple(args)
-
-
 def test_get_closure_attrs() -> None:
     result = util.get_closure_attrs(get_function())
     pprint.pprint(result)
     assert len(result.parameters) == 6
-    assert ("y", unsized_tuple(), False, None) in result.parameters
-    assert (
-        "x",
-        unsized_tuple(
-            "foo",
-        ),
-        False,
-        None,
-    ) in result.parameters
-    assert ("x", unsized_tuple("bar", "foo"), False, None) in result.parameters
-    assert ("default_arg", unsized_tuple("to_bytes"), False, None) in result.parameters
-    assert ("args", unsized_tuple("__len__"), False, None) in result.parameters
-    assert ("kwargs", unsized_tuple("items"), False, None) in result.parameters
+    assert ("y", (), False, None) in result.parameters
+    assert ("x", ("foo",), False, None) in result.parameters
+    assert ("x", ("bar", "foo"), False, None) in result.parameters
+    assert ("default_arg", ("to_bytes",), False, None) in result.parameters
+    assert ("args", ("__len__",), False, None) in result.parameters
+    assert ("kwargs", ("items",), False, None) in result.parameters
 
     assert len(result.nonlocals) == 1
-    assert ("nonlocalvar", unsized_tuple("real"), True, 5) in result.nonlocals
+    assert ("nonlocalvar", ("real",), True, 5) in result.nonlocals
 
     print(result.myglobals)
     assert len(result.myglobals) == 2

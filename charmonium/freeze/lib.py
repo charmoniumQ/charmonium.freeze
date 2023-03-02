@@ -16,7 +16,7 @@ class FreezeError(Exception):
     pass
 
 
-class UnfreezableTypeError(FreezeError):
+class UnfreezableTypeError(FreezeError, NotImplementedError):
     pass
 
 
@@ -159,9 +159,8 @@ def freeze_dispatch(
     _depth: int,
     _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    ty = type(obj).__name__
-    raise NotImplementedError(
-        f"charmonium.freeze is not implemented for {ty}."
+    raise UnfreezableTypeError(
+        f"charmonium.freeze is not implemented for {type(obj).__name__}."
         "See <https://github.com/charmoniumQ/charmonium.time_block/blob/master/README.rst> for how to add a new type."
     )
 
@@ -235,12 +234,12 @@ def freeze_attrs(
     """
     all_min_ref = None
     all_is_immutable = obj_is_immutable
-    frozen_items: List[Tuple[str, Any]] = [("", None)] * len(obj)
+    frozen_items: List[Any] = [None] * len(obj)
     # sorted so we iterate over the members in a consistent order.
     for index, (key, val) in enumerate(sorted(obj.items())):
         logger.debug("%s %s", " " * depth, key)
         frozen_val, is_immutable, min_ref = _freeze(val, config, tabu, depth, index)
-        frozen_items[index] = (key, frozen_val)
+        frozen_items[index] = (key, frozen_val) if write_attrs else frozen_val
         if min_ref is not None:
             all_min_ref = min_with_none_inf(min_ref, all_min_ref)
         all_is_immutable = all_is_immutable and is_immutable

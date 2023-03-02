@@ -64,13 +64,13 @@ def summarize_diff_of_frozen(obj0: Hashable, obj1: Hashable) -> str:
             longest_common = common_prefix(longest_common, difference[1].labels[1:])
         ret = []
         if len(longest_common) > 3:
-            ret.append("obj0_sub = obj0{}".format("".join(longest_common)))
+            ret.append(f"obj0_sub = obj0{''.join(longest_common)}")
             ret.append(
                 pprint.pformat(
                     differences[0][0].objects[len(longest_common)], width=300
                 )
             )
-            ret.append("obj1_sub = obj1{}".format("".join(longest_common)))
+            ret.append(f"obj1_sub = obj1{''.join(longest_common)}")
             ret.append(
                 pprint.pformat(
                     differences[0][1].objects[len(longest_common)], width=300
@@ -79,10 +79,10 @@ def summarize_diff_of_frozen(obj0: Hashable, obj1: Hashable) -> str:
         for difference in differences:
             path_from_sub = "".join(difference[0].labels[len(longest_common) + 1 :])
             ret.append(
-                "obj0_sub{} == {}".format(path_from_sub, difference[0].objects[-1])
+                f"obj0_sub{path_from_sub} == {difference[0].objects[-1]}"
             )
             ret.append(
-                "obj1_sub{} == {}".format(path_from_sub, difference[1].objects[-1])
+                f"obj1_sub{path_from_sub} == {difference[1].objects[-1]}"
             )
         return "\n".join(ret)
     else:

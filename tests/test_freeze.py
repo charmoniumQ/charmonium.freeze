@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, List, Mapping, cast
 
 import pytest
-from charmonium.determ_hash import determ_hash
 from obj_test_cases import (
     equivalents,
     immutables,
@@ -19,6 +18,7 @@ from obj_test_cases import (
     non_immutables,
 )
 
+from charmonium.determ_hash import determ_hash
 from charmonium.freeze import (
     Config,
     FreezeRecursionError,
@@ -30,8 +30,9 @@ from charmonium.freeze import (
 from charmonium.freeze.lib import _freeze
 
 
-def test_immmutability() -> None:
+def test_immutability() -> None:
     for obj in immutables:
+        print(type(obj), repr(obj))
         frozen = _freeze(obj, global_config, {}, 0, 0)
         if not frozen[1]:
             pprint.pprint(obj, width=1000)
@@ -86,6 +87,20 @@ def test_determinism_over_copies(input_kind: str) -> None:
         assert freeze0 == freeze1
 
 
+@pytest.mark.parametrize("input_kind", non_equivalents.keys())
+def test_determinism_over_processes(
+    input_kind: str,
+    past_freezes: Mapping[str, List[int]],
+) -> None:
+    for past_hash, value in zip(past_freezes[input_kind], non_equivalents[input_kind]):
+        new_hash = freeze(value)
+        if past_hash != new_hash:
+            summarize_diff_of_frozen(past_hash, new_hash)
+            pprint.pprint(past_hash, width=1000)
+            pprint.pprint(new_hash, width=1000)
+        assert past_hash == new_hash, f"Determinism-over-processes failed for {value}"
+
+
 # This is a fixture because it should only be evaluated once.
 @pytest.fixture(name="past_freezes", scope="session")
 def fixture_past_freezes() -> Mapping[str, List[List[Any]]]:
@@ -111,20 +126,6 @@ if __name__ == "__main__":
         for value_kind, values in non_equivalents.items()
     }
     sys.stdout.buffer.write(pickle.dumps(data))
-
-
-@pytest.mark.parametrize("input_kind", non_equivalents.keys())
-def test_determinism_over_processes(
-    input_kind: str,
-    past_freezes: Mapping[str, List[int]],
-) -> None:
-    for past_hash, value in zip(past_freezes[input_kind], non_equivalents[input_kind]):
-        new_hash = freeze(value)
-        if past_hash != new_hash:
-            summarize_diff_of_frozen(past_hash, new_hash)
-            pprint.pprint(past_hash, width=1000)
-            pprint.pprint(new_hash, width=1000)
-        assert past_hash == new_hash, f"Determinism-over-processes failed for {value}"
 
 
 def test_consistency_over_identicals() -> None:
@@ -161,6 +162,11 @@ def test_logs(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG, logger="charmonium.freeze"):
         freeze(frozenset({(1, "hello")}))
     assert caplog.text
+
+
+def test_config_attrs() -> None:
+    with pytest.raises(AttributeError):
+        global_config.wrong_attr_name = 4
 
 
 def test_recursion_limit() -> None:

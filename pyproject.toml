@@ -43,8 +43,7 @@ exclude_lines = [
     'pragma: no cover',
     'def __repr__',
     'if self\.debug',
-    'raise AssertionError',
-    'raise NotImplementedError',
+    'raise .*Error',
     'if False:',
     'if __name__ == .__main__.:',
 	'if TYPE_CHECKING',
@@ -52,10 +51,6 @@ exclude_lines = [
     '\w*\.\.\.$',
     '\w*pass$',
 ]
-
-# [tool.pylint]
-# Too long for inclusion here
-# see pylintrc
 
 [tool.mypy]
 strict = true
@@ -91,7 +86,6 @@ commands =
 autoimport = "^0.7.5"
 isort = "^5.10.0"
 black = "^22.3"
-pylint = "^2.11.1"
 mypy = "^0.991"
 pytest = "^6.2.5"
 pytest-xdist = "^2.4.0"
@@ -119,6 +113,8 @@ numpy = "^1.22.3"
 "charmonium.determ-hash" = "^0.2.2"
 icecream = "^2.1.2"
 autoflake = "^1.7.7"
+ruff = "^0.0.253"
+pylint = "^2.16.2"
 
 [tool.poetry.dependencies]
 python = "^3.8"

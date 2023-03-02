@@ -345,20 +345,16 @@ I do this to find the differences between subsequent runs:
 TODO
 ----
 
-- ☑ Bring hash into separate package.
-
-- ☐ Bring object-diff into separate package.
-
 - ☐ Correctness
 
   - ☑ Test hashing sets with different orders. Assert tests fail.
   - ☑ Test hashing dicts with different orders. Assert tests fail.
   - ☑ Don't include properties in hash.
   - ☑ Test that freeze of an object includes freeze of its instance methods.
-  - ☐ Freeze module by its attributes, unless module is constant.
+  - ☐ Detect if a module/package has a version. If present, use that. Else, use each attribute.
   - ☐ Support closures which include ``import x`` and ``from x import y``
   - ☑ Test functions with minor changes.
-  - ☐ Test set/dict with diff hash.
+  - ☑ Test set/dict with diff hash.
   - ☑ Test obj with slots.
   - ☑ Test hash for objects and classes more carefully.
   - ☑ Improve test coverage.
@@ -367,6 +363,7 @@ TODO
 - ☑ API
 
   - ☑ Use user-customizable multidispatch.
+  - ☑ Bring hash into separate package.
   - ☑ Make it easier to register a freeze method for a type.
   - ☑ Encapsulate global config into object.
   - ☑ Make freeze object-oriented with a module-level instance, like ``random.random`` and ``random.Random``.
@@ -375,6 +372,10 @@ TODO
   - ☐ Move "get call graph" into its own package.
   - ☐ Document configuration options.
   - ☐ Document ``summarize_diff`` and ``iterate_diffs``.
+  - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
+  - ☐ Config object should cascade with ``with config.set(a=b)``
+  - ☐ Bring hash into the same package, by having ``config.hash_only``. When ``True``, we return a single int, else a representation of the original object.
+  - ☐ Bring object-diff into separate package.
 
 - ☑ Make ``freeze`` handle more types:
 

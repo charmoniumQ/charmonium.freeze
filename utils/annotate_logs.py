@@ -17,7 +17,7 @@ def get_line_lengths(lines: List[str], ignore_prefix: int = 0) -> List[int]:
 
     stack = []
     for line_no, line in enumerate(lines):
-        level = re.match(f"^ *", line[ignore_prefix:]).end()
+        level = re.match("^ *", line[ignore_prefix:]).end()
         while level < len(stack):
             # terminate this block
             block = stack.pop()

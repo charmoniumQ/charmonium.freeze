@@ -3,24 +3,25 @@ from __future__ import annotations
 import contextlib
 import datetime
 import functools
+import inspect
 import io
 import logging
-import pickle
+import pathlib
 import re
 import sys
 import tempfile
 import threading
-import zlib
-from pathlib import Path
+import types
 from typing import Any, Generator, Generic, Iterator, List, Mapping, Type, TypeVar, cast
 
 import matplotlib.figure
 import numpy
 import pandas
-from charmonium.determ_hash import determ_hash
 from tqdm import tqdm
+from charmonium.determ_hash import determ_hash
+from charmonium.freeze import freeze, global_config
 
-from charmonium.freeze import freeze
+import module_example
 
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
@@ -46,14 +47,6 @@ class WithSlots:
     def __init__(self, a: int, b: int) -> None:
         self.a = a
         self.b = b
-
-
-class WithGetFrozenState:
-    def __init__(self, value: int) -> None:
-        self._value = value
-
-    def __getfrozenstate__(self) -> int:
-        return 0
 
 
 class TreeNode:
@@ -135,6 +128,48 @@ def get_generator(
 range10p1 = iter(range(10))
 next(range10p1)
 
+
+class UnfreezableType:
+    def __getfrozenstate__(self):
+        raise TypeError(
+            "This is an unfreezable type. "
+            "It should have never been tried to be frozen."
+        )
+
+
+unfreezable_obj = UnfreezableType()
+ignored_unfreezable_obj = UnfreezableType()
+
+
+global_config.ignore_objects_by_id.add(id(ignored_unfreezable_obj))
+
+
+class WithGetFrozenState:
+    """This _is_ freezable, but only by the custom __getfrozenstate__,
+    not the default methods.
+    """
+    def __init__(self, value: int, other_value: Any) -> None:
+        self._value = value
+        self._other_value = other_value
+
+    def __getfrozenstate__(self) -> int:
+        return self._value
+
+
+class CustomFreezableType:
+    foo = unfreezable_obj
+    def __getfrozenstate__(self):
+        return None
+
+
+def ignored_function():
+    # This should be ignored, so unfreezable_obj should never be hit.
+    return str(unfrezable_obj)
+
+
+global_config.ignore_functions.add((ignored_function.__module__, ignored_function.__name__))
+
+
 # pylint: disable=consider-using-with
 non_equivalents: Mapping[str, Any] = {
     "ellipses": [...],
@@ -150,13 +185,13 @@ non_equivalents: Mapping[str, Any] = {
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
     # TODO: add freeze to functools.singledispatch
     "functools.singledispatch": [single_dispatch_test, determ_hash],
-    "function": [cast, tqdm, *dir(tempfile)],
+    "function": [cast, tqdm, *dir(tempfile), ignored_function],
     "unbound methods": [ClassWithStaticMethod.foo, ClassWithStaticMethod.baz],
     "bound methods": [ClassWithStaticMethod.bar, ClassWithStaticMethod().baz],
     "lambda": [lambda: 1, lambda: 2, lambda: global0, lambda: global1],
     "builtin_function": [open, input],
     "code": [freeze.__code__, determ_hash.__code__],
-    "module": [zlib, pickle],
+    "module": [pathlib, module_example],
     "range": [range(10), range(20)],
     "iterator": [iter(range(10)), range10p1],
     "generator": [
@@ -206,7 +241,7 @@ non_equivalents: Mapping[str, Any] = {
         numpy.int64(456),
         numpy.float32(456),
     ],
-    "Path": [Path(), Path("abc"), Path("def")],
+    "Path": [pathlib.Path(), pathlib.Path("abc"), pathlib.Path("def")],
     "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4, dtype=int), numpy.ones(4)],
     "obj with properties": [WithProperties(3), WithProperties(4)],
     "tqdm": [tqdm(range(10), disable=True), tqdm(range(20), disable=True)],
@@ -226,6 +261,9 @@ non_equivalents: Mapping[str, Any] = {
     "datetime": [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 1, 1, 1)],
     "locky objects": [threading.Lock(), threading.RLock()],
     "cycle to different thing": [TreeNode.cycle_a(), TreeNode.cycle_b()],
+    "MappingProxyType": [types.MappingProxyType({"a": 3}), types.MappingProxyType({"a": 4})],
+    # "Frame": [inspect.currentframe()],  # TODO
+    # "ignored objects": [ignored_unfreezable_obj],  # TODO
 }
 
 
@@ -239,10 +277,12 @@ non_copyable_types = {
     "locky objects",
     "generator",
     "context manager",
+    "MappingProxyType",
+    "Frame",
 }
 
 
-p = Path()
+p = pathlib.Path()
 hash(p)
 readme_rpb2 = open("README.rst", "r+b")  # pylint: disable=consider-using-with
 readme_rpb2.read(10)
@@ -258,14 +298,14 @@ equivalents: Mapping[str, List[Any]] = {
     "obj with properties": [WithProperties(3), WithProperties(3)],
     "numpy.ndarray": [numpy.zeros(4), numpy.zeros(4)],
     "Path": [
-        Path(),
+        pathlib.Path(),
         p,
         # when p gets hashed, the hash gets cached in an extra field.
     ],
     "diff identical class": [get_class(3), get_class(3)],
     "instances of diff identical classes": [get_class(3)(), get_class(3)()],
     "dict with same order": [{"a": 1, "b": 2}, {"a": 1, "b": 2}],
-    "object with getfrozenstate": [WithGetFrozenState(3), WithGetFrozenState(4)],
+    "object with getfrozenstate": [WithGetFrozenState(3, unfreezable_obj), WithGetFrozenState(3, unfreezable_obj)],
     "logging.Logger": [logging.getLogger("a.b"), logging.getLogger("a.b")],
     "io.BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"abc")],
     "io.StringIO": [io.StringIO("abc"), io.StringIO("abc")],
@@ -285,6 +325,7 @@ equivalents: Mapping[str, List[Any]] = {
     "threading.RLock": [threading.RLock(), threading.RLock()],
     "timedelta": [datetime.timedelta(seconds=120), datetime.timedelta(minutes=2)],
     "tqdm": [tqdm(range(10), disable=True), tqdm(range(10), disable=True)],
+    "MappingProxyType": [types.MappingProxyType({"a": 3}), types.MappingProxyType({"a": 3})],
 }
 
 # pylint: disable=consider-using-with

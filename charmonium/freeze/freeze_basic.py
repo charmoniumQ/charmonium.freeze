@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import pathlib
 import re
 import types
 from typing import Any, Dict, Hashable, Optional, Tuple
@@ -124,12 +125,18 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    if config.ignore_extensions and not getattr(obj, "__module__", None):
-        return obj.__name__, True, None
+    if config.ignore_extensions and not hasattr(obj, "__file__"):
+        return (obj.__name__, True, None)
+    if hasattr(obj, "__file__") and any(
+            ancestor in config.ignore_files
+            for ancestor in pathlib.Path(obj.__file__).resolve().parents
+    ):
+        return (obj.__name__, True, None)
     attrs = {
         attr_name: getattr(obj, attr_name, None)
         for index, attr_name in enumerate(dir(obj))
         if hasattr(obj, attr_name)
+        and attr_name not in config.ignore_module_attrs
         and (obj.__name__, attr_name) not in config.ignore_globals
     }
     return freeze_attrs(attrs, True, True, config, tabu, depth)

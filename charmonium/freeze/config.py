@@ -13,6 +13,17 @@ class Config:
 
     recursion_limit: Optional[int] = 150
 
+    ignore_module_attrs: Set[str] = field(
+        default_factory=lambda: {
+            "__builtins__",
+            "__cached__",
+            "__doc__",
+            "__file__",
+            "__loader__",
+            "__spec__",
+        }
+    )
+
     # Put ``(module, global_name)`` of which never change or whose changes do
     # not affect the result computation here (e.g. global caches). This will not
     # attempt to freeze their state.
@@ -114,7 +125,7 @@ class Config:
             ("re", "RegexFlag"),
             # see https://github.com/python/cpython/issues/92049
             ("sre_constants", "_NamedIntConstant"),
-            # TODO[research]: Remove these when we have caching
+            # TODO: [research] Remove these when we have caching
             # They are purely performance (not correctness)
             ("pandas.core.dtypes.base", "Registry"),
         }
@@ -133,9 +144,12 @@ class Config:
     # result computation.
     ignore_classes: Set[Tuple[str, Optional[str]]] = field(
         default_factory=lambda: {
-            # TODO[research]: Remove these when we have caching
+            ("tqdm.std", "tqdm"),
+            ("re", "RegexFlag"),
+
+            # TODO: [research] Remove these when we have caching and integer stuff
             # They are purely performance (not correctness)
-            ("pathlib", "PurePath"),
+            ("pathlib", None),
             ("builtins", None),
             ("ABC", None),
             ("ABCMeta", None),
@@ -145,8 +159,6 @@ class Config:
             ("pandas.core.series", "Series"),
             ("pandas.core.indexes.base", "Index"),
             ("matplotlib.figure", "Figure"),
-            ("tqdm.std", "tqdm"),
-            ("re", "RegexFlag"),
             ("typing", "Generic"),
         }
     )
@@ -156,6 +168,8 @@ class Config:
     # to the resulting computation.
     ignore_functions: Set[Tuple[str, str]] = field(default_factory=set)
 
+    # Whether to ignore modules that are a C extension.
+    # These are modules that have no __file__ attribute.
     ignore_extensions: bool = True
 
     ignore_dict_order: bool = False

@@ -3,19 +3,20 @@ from __future__ import annotations
 import builtins
 import dis
 import inspect
+import pathlib
 import types
-from pathlib import Path
 from typing import (
     Any,
     Callable,
-    Generic,
     Iterable,
     NamedTuple,
     Optional,
     TypeVar,
-    Union,
     cast,
 )
+
+
+_T = TypeVar("_T")
 
 
 class VarAttr(NamedTuple):
@@ -150,34 +151,8 @@ def getclosurevars(func: types.FunctionType) -> inspect.ClosureVars:
     )
 
 
-class Sentinel:
-    pass
-
-
-sentinel = Sentinel()
-
-
-_T = TypeVar("_T")
-
-
-class Ref(Generic[_T]):
-    def __init__(self, default_val: _T) -> None:
-        self.val = default_val
-
-    def get(self) -> _T:
-        return self.val
-
-    def set(self, new_val: _T) -> None:
-        self.val = new_val
-
-    def __call__(self, new_val: Union[_T, Sentinel] = sentinel) -> _T:
-        if not isinstance(new_val, Sentinel):
-            self.set(new_val)
-        return self.get()
-
-
 # Only Python 3.9 has Path.is_relative_to :'(
-def is_relative_to(a: Path, b: Path) -> bool:
+def is_relative_to(a: pathlib.Path, b: pathlib.Path) -> bool:
     try:
         a.relative_to(b)
     except ValueError:
