@@ -375,6 +375,7 @@ TODO
   - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
   - ☐ Config object should cascade with ``with config.set(a=b)``
   - ☐ Bring hash into the same package, by having ``config.hash_only``. When ``True``, we return a single int, else a representation of the original object.
+    - I don't know. That makes it impossible to use the cache and memo. You don't know the hash of each thing.
   - ☐ Bring object-diff into separate package.xo
 
 - ☑ Make ``freeze`` handle more types:
