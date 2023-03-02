@@ -814,6 +814,14 @@ optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
 [[package]]
+name = "py-cpuinfo"
+version = "9.0.0"
+description = "Get CPU info with pure Python"
+category = "dev"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "pycparser"
 version = "2.21"
 description = "C parser in Python"
@@ -905,6 +913,23 @@ toml = "*"
 
 [package.extras]
 testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "requests", "xmlschema"]
+
+[[package]]
+name = "pytest-benchmark"
+version = "4.0.0"
+description = "A ``pytest`` fixture for benchmarking code. It will group the tests into rounds that are calibrated to the chosen timer."
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+py-cpuinfo = "*"
+pytest = ">=3.8"
+
+[package.extras]
+aspect = ["aspectlib"]
+elasticsearch = ["elasticsearch"]
+histogram = ["pygal", "pygaljs"]
 
 [[package]]
 name = "pytest-cov"
@@ -1340,7 +1365,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "flake8 (<5)", "pytest-co
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "ca30bef0a3c2628b89e83f2a451ee563d0a001a347ed1b45c38585261eeba21f"
+content-hash = "1397ce3f2cf1bc14a444cc9f14d98ccf0a74cc76f9216970db9135004f3d9eac"
 
 [metadata.files]
 appnope = []
@@ -1410,6 +1435,7 @@ prompt-toolkit = []
 proselint = []
 ptyprocess = []
 py = []
+py-cpuinfo = []
 pycparser = []
 pyflakes = []
 pygments = []
@@ -1417,6 +1443,7 @@ pylint = []
 pyparsing = []
 pyprojroot = []
 pytest = []
+pytest-benchmark = []
 pytest-cov = []
 pytest-forked = []
 pytest-xdist = []

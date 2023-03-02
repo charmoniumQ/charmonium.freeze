@@ -28,7 +28,8 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 
 [tool.pytest.ini_options]
-addopts = "--quiet --numprocesses=auto --doctest-modules --doctest-glob='*.rst'"
+addopts = "--quiet --numprocesses=auto --doctest-modules --doctest-glob='*.rst' --benchmark-disable --benchmark-storage=build/benchmark"
+# pytest -k test_benchmark --benchmark-enable --numprocesses 0
 
 [tool.coverage.run]
 branch = true
@@ -115,6 +116,7 @@ icecream = "^2.1.2"
 autoflake = "^1.7.7"
 ruff = "^0.0.253"
 pylint = "^2.16.2"
+pytest-benchmark = "^4.0.0"
 
 [tool.poetry.dependencies]
 python = "^3.8"

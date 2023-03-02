@@ -351,14 +351,14 @@ TODO
   - ☑ Test hashing dicts with different orders. Assert tests fail.
   - ☑ Don't include properties in hash.
   - ☑ Test that freeze of an object includes freeze of its instance methods.
-  - ☐ Detect if a module/package has a version. If present, use that. Else, use each attribute.
-  - ☐ Support closures which include ``import x`` and ``from x import y``
   - ☑ Test functions with minor changes.
   - ☑ Test set/dict with diff hash.
   - ☑ Test obj with slots.
   - ☑ Test hash for objects and classes more carefully.
   - ☑ Improve test coverage.
   - ☑ Investigate when modules are assumed constant.
+  - ☐ Detect if a module/package has a version. If present, use that. Else, use each attribute.
+  - ☐ Support closures which include ``import x`` and ``from x import y``
 
 - ☑ API
 
@@ -368,14 +368,14 @@ TODO
   - ☑ Encapsulate global config into object.
   - ☑ Make freeze object-oriented with a module-level instance, like ``random.random`` and ``random.Random``.
     - This makes it easier for different callers to have their own configuration options.
-    - ☐ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what ``charmonium.determ_hash`` does. Use this configuration in ``charmonium.cache``.
+  - ☐ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what ``charmonium.determ_hash`` does. Use this configuration in ``charmonium.cache``.
   - ☐ Move "get call graph" into its own package.
   - ☐ Document configuration options.
   - ☐ Document ``summarize_diff`` and ``iterate_diffs``.
   - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
   - ☐ Config object should cascade with ``with config.set(a=b)``
   - ☐ Bring hash into the same package, by having ``config.hash_only``. When ``True``, we return a single int, else a representation of the original object.
-  - ☐ Bring object-diff into separate package.
+  - ☐ Bring object-diff into separate package.xo
 
 - ☑ Make ``freeze`` handle more types:
 
@@ -392,8 +392,8 @@ TODO
 
 - ☐ Performance
 
-  - ☐ Make performance benchmarks.
   - ☑ Memoize the hash of immutable data:
     - If function contains no locals or globals except other immutables, it is immutable.
     - If a collection is immutable and contains only immutables, it is immutable.
   - ☐ Consider deprecating ``combine_frozen``.
+  - ☑ Make performance benchmarks.

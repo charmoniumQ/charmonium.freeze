@@ -20,8 +20,11 @@ import pandas
 from tqdm import tqdm
 from charmonium.determ_hash import determ_hash
 from charmonium.freeze import freeze, global_config
-
 import module_example
+
+
+_T = TypeVar("_T")
+_U = TypeVar("_U")
 
 
 def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
@@ -264,6 +267,7 @@ non_equivalents: Mapping[str, Any] = {
     "MappingProxyType": [types.MappingProxyType({"a": 3}), types.MappingProxyType({"a": 4})],
     # "Frame": [inspect.currentframe()],  # TODO
     # "ignored objects": [ignored_unfreezable_obj],  # TODO
+    "TypeVar": [_T, _U],
 }
 
 
@@ -339,10 +343,7 @@ class A:
     pass
 
 
-T = TypeVar("T")
-
-
-class AChild(A, Generic[T]):
+class AChild(A, Generic[_T]):
     pass
 
 
@@ -374,6 +375,7 @@ immutables: List[Any] = [
     AChild(),
 ]
 
+
 non_immutables: List[Any] = [
     [],
     {},
@@ -384,3 +386,27 @@ non_immutables: List[Any] = [
     BChild,
     BChild(),
 ]
+
+
+bytearray_size = 1024 * 1024
+nested_list_length = 2
+dtype = numpy.int32()
+deeply_nested_list_elems = bytearray_size // dtype.nbytes
+deeply_nested_list = list(
+    numpy.arange(deeply_nested_list_elems, dtype=dtype)
+    .reshape((nested_list_length,) * int(numpy.log(deeply_nested_list_elems) / numpy.log(nested_list_length)))
+)
+    
+benchmark_cases: Mapping[str, Any] = {
+    # Interesting because they are slow
+    "deeply nested list": deeply_nested_list,
+    "function": insert_recurrence,
+    "functools.partial": functools.partial(function_test, 3),
+
+    # Objects that are fast now, but may become troublesome in the future
+    "module": [module_example],
+    "path": [pathlib.Path("/hello/world/this/is/a/test")],
+    "logger": [logging.getLogger("hello.world.this.is.a.test")],
+    "generic": [List[int]],
+    "long bytearray": b"".join(bytes(range(255)) for _ in range(bytearray_size // bytearray_size)),
+}
