@@ -4,7 +4,14 @@ import types
 from typing import Any, Dict, Hashable, Optional, Tuple, Type
 
 from .config import Config
-from .lib import _freeze, combine_frozen, freeze_attrs, freeze_dispatch, logger
+from .lib import (
+    _freeze,
+    combine_frozen,
+    freeze_attrs,
+    freeze_dispatch,
+    freeze_sequence,
+    logger,
+)
 
 
 @freeze_dispatch.register(type)
@@ -17,9 +24,11 @@ def _(
 ) -> Tuple[Hashable, bool, Optional[int]]:
     assert obj == obj.__mro__[0]
     ret = freeze_class(obj.__mro__[0], config, tabu, depth, index)
-    for subindex, class_ in enumerate(obj.__mro__[1:]):
-        ret = combine_frozen(ret, freeze_class(class_, config, tabu, depth, subindex))
-    return ret
+    if len(obj.__mro__) > 1:
+        ret2 = _freeze(obj.__mro__[1], config, tabu, depth, index)
+        return combine_frozen(ret, ret2, config)
+    else:
+        return ret
 
 
 def freeze_class(
@@ -41,23 +50,30 @@ def freeze_class(
         # ))
     ):
         logger.debug("%s ignoring %s", " " * depth, type_pair)
-        return (b"class", ".".join(type_pair)), True, None
-    # NOTE: this says that a class never gets new attributes and attributes never get reassigned.
-    # E.g., If A.x is a list, A is mutable; if A.x is a tuple, A is immutable (assume no A.y = 3 and no A.y = different_tuple).
-    ret = freeze_attrs(
+        return freeze_sequence(type_pair, True, True, config, tabu, depth)
+    attrs, attrs_immutable, attrs_level = freeze_attrs(
         {
             key: val
             for index, (key, val) in enumerate(sorted(obj.__dict__.items()))
             if key not in config.special_class_attributes
             and (obj.__module__, obj.__name__, key) not in config.ignore_attributes
         },
-        True,
-        True,
-        config,
-        tabu,
-        depth,
+        # NOTE: this says that a class never gets new attributes and attributes never get reassigned.
+        # E.g., If A.x is a list, A is mutable; if A.x is a tuple, A is immutable (assume no A.y = 3 and no A.y = different_tuple).
+        is_immutable=True,
+        write_attrs=True,
+        config=config,
+        tabu=tabu,
+        depth=depth,
     )
-    return (b"class", obj.__name__, ret[0]), ret[1], ret[2]
+    return freeze_sequence(
+        (obj.__name__, attrs),
+        is_immutable=attrs_immutable,
+        order_matters=False,
+        config=config,
+        tabu=tabu,
+        depth=depth,
+    )
 
 
 @freeze_dispatch.register(staticmethod)
@@ -101,11 +117,18 @@ def _(
     depth: int,
     _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    ret: tuple[Hashable, bool, Optional[int]] = (), True, None
-    ret = combine_frozen(ret, _freeze(obj.fget, config, tabu, depth, 0))
-    ret = combine_frozen(ret, _freeze(obj.fset, config, tabu, depth, 1))
-    ret = combine_frozen(ret, _freeze(obj.fdel, config, tabu, depth, 2))
-    return (b"property", *ret[0]), ret[1], ret[2]
+    return freeze_attrs(
+        {
+            "fget": obj.fget,
+            "fset": obj.fset,
+            "fdel": obj.fdel,
+        },
+        is_immutable=True,
+        write_attrs=False,
+        config=config,
+        tabu=tabu,
+        depth=depth,
+    )
 
 
 @freeze_dispatch.register(types.WrapperDescriptorType)
@@ -117,4 +140,11 @@ def _(
 def _(
     obj: Any, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    return (obj.__class__.__name__.encode(), obj.__name__), True, None
+    return freeze_sequence(
+        (obj.__class__.__name__.encode(), obj.__name__.encode()),
+        is_immutable=True,
+        order_matters=True,
+        config=config,
+        tabu=tabu,
+        depth=depth,
+    )

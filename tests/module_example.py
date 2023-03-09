@@ -1,8 +1,5 @@
-import os
-
-
 x = 3
 
 
-def f():
+def f() -> int:
     return x

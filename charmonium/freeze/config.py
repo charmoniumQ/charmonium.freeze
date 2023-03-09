@@ -1,6 +1,30 @@
+import contextlib
+import hashlib
 import pathlib
 from dataclasses import dataclass, field, fields
-from typing import Any, Dict, Hashable, Optional, Set, Tuple
+from typing import Any, Dict, Generator, Hashable, Optional, Set, Tuple
+
+from typing_extensions import Protocol
+
+
+class Hasher(Protocol):
+    def __call__(self, obj: bytes) -> int:
+        pass
+
+
+class HasherFromHashlibHasher(Hasher):
+    def __init__(self, hashlib_hasher: Any, hash_length_bits: int) -> None:
+        self.hashlib_hasher = hashlib_hasher
+        self.hash_length_bits = hash_length_bits
+        if not hash_length_bits % 8 == 0:
+            raise RuntimeError("Must hash an even number of bytes")
+
+    def __call__(self, obj: bytes) -> int:
+        hashlib_hasher_instance = self.hashlib_hasher(
+            digest_size=self.hash_length_bits // 8
+        )
+        hashlib_hasher_instance.update(obj)
+        return int.from_bytes(hashlib_hasher_instance.digest(), "big")
 
 
 @dataclass
@@ -146,10 +170,9 @@ class Config:
         default_factory=lambda: {
             ("tqdm.std", "tqdm"),
             ("re", "RegexFlag"),
-
             # TODO: [research] Remove these when we have caching and integer stuff
             # They are purely performance (not correctness)
-            ("pathlib", None),
+            # ("pathlib", None),
             ("builtins", None),
             ("ABC", None),
             ("ABCMeta", None),
@@ -197,5 +220,20 @@ class Config:
         }
     )
 
+    hasher: Hasher = HasherFromHashlibHasher(hashlib.blake2s, 64)
+    use_hash: bool = True
+    hash_length: int = 64
+
 
 global_config = Config()
+
+
+@contextlib.contextmanager
+def global_config_ctx(**kwargs: Any) -> Generator[None, None, None]:
+    global global_config
+    old_global_config = global_config
+    global_config = Config(**kwargs)
+    try:
+        yield
+    finally:
+        global_config = old_global_config

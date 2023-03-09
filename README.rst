@@ -80,204 +80,291 @@ Traceback (most recent call last):
 TypeError: unhashable type: 'list'
 
 >>> from charmonium.freeze import freeze
->>> from pprint import pprint
 >>> freeze(obj)
-(1, 2, 3, frozenset({4, 5, 6}), (b'pickle', b'__newobj__', ((b'class', 'builtins.object'),)))
-
-If you want to actually boil this down into a single integer, see
-|charmonium.determ_hash|_. This library's job is just to freeze the
-state.
-
-.. |charmonium.determ_hash| replace:: ``charmonium.determ_hash``
-.. _`charmonium.determ_hash`: https://github.com/charmoniumQ/charmonium.determ_hash
-
-It even works on custom types.
-
->>> # Make a custom type
->>> class Struct:
-...     def frobnicate(self):
-...         print(123)
->>> s = Struct()
->>> s.attr = 4
->>> pprint(freeze(s))
-(b'pickle',
- b'__newobj__',
- ((b'class',
-   'Struct',
-   (('frobnicate',
-     (b'function',
-      'frobnicate',
-      b't\x00d\x01\x83\x01\x01\x00d\x00S\x00',
-      (None, 123))),),
-   b'class',
-   'builtins.object'),),
- ('attr', 4))
-
-And methods, functions, lambdas, etc.
-
->>> pprint(freeze(lambda x: x + 123))
-(b'function', '<lambda>', b'|\x00d\x01\x17\x00S\x00', (None, 123))
->>> import functools
->>> pprint(freeze(functools.partial(print, 123)))
-(b'pickle',
- b'class',
- 'partial',
- ...,
- b'class',
- 'builtins.object',
- ('builtin func', 'print'),
- ('builtin func', 'print'),
- (123,),
- (),
- None)
->>> pprint(freeze(Struct.frobnicate))
-(b'function',
- 'frobnicate',
- b't\x00d\x01\x83\x01\x01\x00d\x00S\x00',
- (None, 123))
->>> i = 0
->>> def square_plus_i(x):
-...     # Value of global variable will be included in the function's frozen state.
-...     return x**2 + i
-... 
->>> pprint(freeze(square_plus_i))
-(b'function',
- 'square_plus_i',
- b'|\x00d\x01\x13\x00t\x00\x17\x00S\x00',
- (None, 2),
- ('i', 0))
-
-If the source code of ``square_plus_i`` changes between successive invocations,
-then the ``freeze`` value will change. This is useful for caching unchanged
-functions.
+9561766455304166758
 
 -------------
-Special cases
+Configuration
 -------------
 
-- ``freeze`` on functions returns their bytecode, constants, and
-  closure-vars. The remarkable thing is that this is true across subsequent
-  invocations of the same process. If the user edits the script and changes the
-  function, then it's ``freeze`` will change too.
+By changing the configuration, we can see the exact data that gets hashed.
+
+We can change the configuration in a few ways:
+
+- Object-oriented (preferred)
+
+  >>> from charmonium.freeze import Config
+  >>> freeze(obj, Config(use_hash=False))
+  (1, 2, 3, frozenset({4, 5, 6}), ((('builtins', 'object'),), b'copyreg.__newobj__'))
+
+- Global variable, but in this case, we must also clear the cache when we mutate
+  the config.
+
+  >>> from charmonium.freeze import global_config
+  >>> global_config.use_hash = False
+  >>> global_config.memo.clear()
+  >>> freeze(obj)
+  (1, 2, 3, frozenset({4, 5, 6}), ((('builtins', 'object'),), b'copyreg.__newobj__'))
+
+``use_hash=True`` will be faster and produce less data, but I will demonstrate
+it with ``use_hash=False`` so you can see what data gets included in the state.
+
+See the source code ``charmonium/freeze/config.py`` for other configuration
+options.
+
+------------------
+Freezing Functions
+------------------
+
+``freeze`` on functions returns their bytecode, constants, and closure-vars. The
+remarkable thing is that this is true across subsequent invocations of the same
+process. If the user edits the script and changes the function, then it's
+``freeze`` will change too. This tells you if it is safe to use the cached value
+of the function.
 
   ::
 
     (freeze(f) == freeze(g)) implies (for all x, f(x) == g(x))
 
-- ``freeze`` on an object returns the data that used in the `pickle
-  protocol`_. This makes ``freeze`` work correctly on most user-defined
-  types. However, there can still be special cases: ``pickle`` may incorporate
-  non-deterministic values. In this case, there are two remedies:
+>>> from pprint import pprint
+>>> i = 456
+>>> func = lambda x: x + i + 123
+>>> pprint(freeze(func))
+(('<lambda>', None, 123, b'|\x00t\x00\x17\x00d\x01\x17\x00S\x00'),
+ (('i', 456),))
 
-  - If you can tweak the definition of the class, add a method called
-    ``__getfrozenstate__`` which returns a deterministic snapshot of the
-    state. This takes precedence over the Pickle protocol, if it is defined.
+As promised, the frozen value includes the bytecode (``b'|x00t...``), the
+constants (123), and the closure variables (456). When we change ``i``, we get a
+different frozen value, indicating that the ``func`` might not be
+computationally equivalent to what it was before.
 
-    >>> class Struct:
-    ...     pass
-    >>> s = Struct()
-    >>> s.attr = 4
-    >>> pprint(freeze(s))
-    (b'pickle',
-     b'__newobj__',
-     ((b'class', 'Struct', (), b'class', 'builtins.object'),),
-     ('attr', 4))
-    >>> # which is based on the Pickle protocol's definition of `__reduce__`:
-    >>> pprint(s.__reduce__())
-    (<function _reconstructor at 0x...>,
-     (<class '__main__.Struct'>, <class 'object'>, None),
-     {'attr': 4})
+>>> i = 789
+>>> pprint(freeze(func))
+(('<lambda>', None, 123, b'|\x00t\x00\x17\x00d\x01\x17\x00S\x00'),
+ (('i', 789),))
 
+``freeze`` works for objects that use function as data.
 
-  - Otherwise, you can ignore certain attributes by creating a
-    ``Config`` object or modifying the ``global_config`` object. See
-    the source code of ``charmonium/freeze/config.py`` for more
-    details.
+>>> import functools
+>>> pprint(freeze(functools.partial(print, 123)))
+(('print',),
+ ('print', (123,), (), None),
+ (frozenset({'partial',
+             (...,
+              ('args', (b'member_descriptor', b'args')),
+              ('func', (b'member_descriptor', b'func')),
+              ('keywords', (b'member_descriptor', b'keywords')))}),
+  ('builtins', 'object')))
 
-    >>> from charmonium.freeze import freeze, Config
-    >>> class Test:
-    ...     deterministic_val = 3
-    ...     nondeterministic_val = 4
-    ... 
-    >>> config = Config()
-    >>> config.ignore_attributes.add(("__main__", "Test", "nondeterministic_val"))
-    >>> freeze(Test(), config)
-    (b'pickle', b'__newobj__', ((b'class', 'Test', (('deterministic_val', 3),), b'class', 'builtins.object'),))
+``freeze`` works for methods.
 
-    Note that ``nondeterministic_val`` is not present in the frozen object.
+>>> class Greeter:
+...     def __init__(self, greeting):
+...         self.greeting = greeting
+...     def greet(self, name):
+...         print(self.greeting + " " + name)
+... 
+>>> pprint(freeze(Greeter.greet))
+(('greet',
+  None,
+  ' ',
+  b't\x00|\x00j\x01d\x01\x17\x00|\x01\x17\x00\x83\x01\x01\x00d\x00S\x00'),)
 
+----------------
+Freezing Objects
+----------------
 
-  - If you cannot tweak the definition of the class or monkeypatch a
-    ``__getfrozenstate__`` method, you can still register `single dispatch
-    handler`_ for that type:
-
-    >>> from typing import Hashable, Optional, Dict, Tuple
-    >>> from charmonium.freeze import _freeze_dispatch, _freeze
-    >>> @_freeze_dispatch.register(Test)
-    ... def _(
-    ...         obj: Test,
-    ...         config: Config,
-    ...         tabu: Dict[int, Tuple[int, int]],
-    ...         level: int,
-    ...         index: int,
-    ...     ) -> Tuple[Hashable, bool, Optional[int]]:
-    ...     # Type annotations are optional.
-    ...     # I have included them here for clarity.
-    ... 
-    ...     # `tabu` is for object cycle detection.
-    ...     # It is handled for you.
-    ... 
-    ...     # `level` is for logging and recursion limits.
-    ...     level = level + 1
-    ... 
-    ...     # Freeze should depend only on deterministic values.
-    ...     if isinstance(obj.deterministic_val, int):
-    ...         return (
-    ...             obj.deterministic_val,
-    ...             # The underlying frozen value. It should be hashable.
-    ...             # It is usually made up of frozenset (replaces dict, set, and class attrs)
-    ...             # and tuple (replaces list).
-    ... 
-    ...             False,
-    ...             # Whether the obj is immutable
-    ...             # If the obj is immutable, it's frozen value need not be recomputed every time.
-    ...             # This is handled for you.
-    ... 
-    ...             None,
-    ...             # The depth of references contained here or None
-    ...             # Currently, this doesn't do anything.
-    ...         )
-    ...     else:
-    ...         # If the underlying instance variable is not hashable, we can use recursion to help.
-    ...         # Call `_freeze` instead of `freeze` to recurse with `tabu` and `level`.
-    ...         return _freeze(obj.deterministic_val, tabu, level, 0)
-    ... 
-    >>> freeze(Test())
-    3
-
-- Note that as of Python 3.7, dictionaries "remember" their insertion order. As such,
-
-  >>> freeze({"a": 1, "b": 2})
-  (('a', 1), ('b', 2))
-  >>> freeze({"b": 2, "a": 1})
-  (('b', 2), ('a', 1))
-
-  This behavior is controllable by ``Config.ignore_dict_order``, which emits a ``frozenset`` of pairs.
-
-  >>> config = Config(ignore_dict_order=True)
-  >>> freeze({"b": 2, "a": 1}, config) == freeze({"a": 1, "b": 2}, config)
-  True
+``freeze`` works on objects by freezing their state and freezing their
+methods. The state is found by the `pickle protocol`_, which the Python language
+implements by default for all classes. To get an idea of what this returns, call
+``obj.__reduce_ex__(4)``. Because we reuse an existing protocol, ``freeze`` work
+correctly on most user-defined types.
 
 .. _`pickle protocol`: https://docs.python.org/3/library/pickle.html#pickling-class-instances
-.. _`single dispatch handler`: https://docs.python.org/3/library/functools.html#functools.singledispatch
 
-----------
-Developing
-----------
+>>> s = Greeter("hello")
+>>> pprint(s.__reduce_ex__(4))
+(<function __newobj__ at 0x...>,
+ (<class '__main__.Greeter'>,),
+ {'greeting': 'hello'},
+ None,
+ None)
+>>> pprint(freeze(s))
+(((frozenset({'Greeter',
+              (('__init__',
+                (('__init__', None, b'|\x01|\x00_\x00d\x00S\x00'),)),
+               ('greet',
+                (('greet',
+                  None,
+                  ' ',
+                  b't\x00|\x00j\x01d\x01\x17\x00|\x01\x17\x00\x83\x01'
+                  b'\x01\x00d\x00S\x00'),)))}),
+   ('builtins', 'object')),),
+ (('greeting', 'hello'),),
+ b'copyreg.__newobj__')
 
-See `CONTRIBUTING.md`_ for instructions on setting up a development environment.
+However, there can still be special cases: ``pickle`` may incorporate
+non-deterministic values. In this case, there are three remedies:
 
-.. _`CONTRIBUTING.md`: https://github.com/charmoniumQ/charmonium.freeze/tree/main/CONTRIBUTING.md
+- If you can tweak the definition of the class, add a method called
+  ``__getfrozenstate__`` which returns a deterministic snapshot of the
+  state. This takes precedence over the Pickle protocol, if it is defined.
+
+  >>> class Greeter:
+  ...     def __init__(self, greeting):
+  ...         self.greeting = greeting
+  ...     def greet(self, name):
+  ...         print(self.greeting + " " + name)
+  ...     def __getfrozenstate__(self):
+  ...         return self.greeting
+  ... 
+  >>> pprint(freeze(Greeter("hello")))
+  ((frozenset({'Greeter',
+               (('__getfrozenstate__',
+                 (('__getfrozenstate__', None, b'|\x00j\x00S\x00'),)),
+                ('__init__', (('__init__', None, b'|\x01|\x00_\x00d\x00S\x00'),)),
+                ('greet',
+                 (('greet',
+                   None,
+                   ' ',
+                   b't\x00|\x00j\x01d\x01\x17\x00|\x01\x17\x00\x83\x01'
+                   b'\x01\x00d\x00S\x00'),)))}),
+    ('builtins', 'object')),
+   'hello')
+
+- Otherwise, you can ignore certain attributes by changing the
+  configuration. See the source code of ``charmonium/freeze/config.py`` for more
+  details.
+
+  >>> class Greeter:
+  ...     def __init__(self, greeting):
+  ...         self.greeting = greeting
+  ...     def greet(self, name):
+  ...         print(self.greeting + " " + name)
+  ... 
+  >>> config = Config(use_hash=False)
+  >>> config.ignore_attributes.add(("__main__", "Greeter", "greeting"))
+  >>> pprint(freeze(Greeter("hello"), config))
+  (((frozenset({'Greeter',
+                (('__init__',
+                  (('__init__', None, b'|\x01|\x00_\x00d\x00S\x00'),)),
+                 ('greet',
+                  (('greet',
+                    None,
+                    ' ',
+                    b't\x00|\x00j\x01d\x01\x17\x00|\x01\x17\x00\x83\x01'
+                    b'\x01\x00d\x00S\x00'),)))}),
+     ('builtins', 'object')),),
+   (),
+   b'copyreg.__newobj__')
+
+  Note that ``'hello'`` is not present in the frozen object any more.
+
+- If you cannot tweak the definition of the class or monkeypatch a
+  ``__getfrozenstate__`` method, you can still register `single dispatch
+  handler`_ for that type:
+
+  .. _`single dispatch handler`: https://docs.python.org/3/library/functools.html#functools.singledispatch
+
+  >>> from typing import Hashable, Optional, Dict, Tuple
+  >>> from charmonium.freeze import _freeze_dispatch, _freeze
+  >>> @_freeze_dispatch.register(Greeter)
+  ... def _(
+  ...         obj: Greeter,
+  ...         config: Config,
+  ...         tabu: Dict[int, Tuple[int, int]],
+  ...         level: int,
+  ...         index: int,
+  ...     ) -> Tuple[Hashable, bool, Optional[int]]:
+  ...     # Type annotations are optional.
+  ...     # I have included them here for clarity.
+  ... 
+  ...     # `tabu` is for object cycle detection. It is handled for you.
+  ...     # `level` is for logging and recursion limits.
+  ...     # `index` is the "birth order" of the children.
+  ...     frozen_greeting = _freeze(obj.greeting, config, tabu, level + 1, 0)
+  ... 
+  ...     return (
+  ...         frozen_greeting[0],
+  ...         # Remember that _freeze returns a triple;
+  ...         # we are only interested in the first element here.
+  ... 
+  ...         False,
+  ...         # Whether the obj is immutable
+  ...         # If the obj is immutable, it's frozen value need not be recomputed every time.
+  ...         # This is handled for you.
+  ... 
+  ...         None,
+  ...         # The depth of references contained here or None
+  ...         # Currently, this doesn't do anything.
+  ...     )
+  ... 
+  >>> freeze(Greeter("Hello"))
+  'Hello'
+
+----------------
+Dictionary order
+----------------
+
+As of Python 3.7, dictionaries "remember" their insertion order. As such,
+
+>>> freeze({"a": 1, "b": 2})
+(('a', 1), ('b', 2))
+>>> freeze({"b": 2, "a": 1})
+(('b', 2), ('a', 1))
+
+This behavior is controllable by ``Config.ignore_dict_order``, which emits a ``frozenset`` of pairs.
+
+>>> config = Config(ignore_dict_order=True)
+>>> freeze({"b": 2, "a": 1}, config) == freeze({"a": 1, "b": 2}, config)
+True
+
+--------------
+Summarize diff
+--------------
+
+This enables a pretty neat utility to compare two arbitrary Python objects.
+
+>>> from charmonium.freeze import summarize_diffs
+>>> obj0 = [0, 1, 2, {3, 4}, {"a": 5, "b": 6, "c": 7}, 8]
+>>> obj1 = [0, 8, 2, {3, 5}, {"a": 5, "b": 7, "d": 8}]
+>>> print(summarize_diffs(obj0, obj1))
+let obj0_sub = obj0
+let obj1_sub = obj1
+obj0_sub.__len__() == 6
+obj1_sub.__len__() == 5
+obj0_sub[1] == 1
+obj1_sub[1] == 8
+obj0_sub[3].has() == 4
+obj1_sub[3].has() == no such element
+obj0_sub[3].has() == no such element
+obj1_sub[3].has() == 5
+obj0_sub[4].keys().has() == c
+obj1_sub[4].keys().has() == no such element
+obj0_sub[4].keys().has() == no such element
+obj1_sub[4].keys().has() == d
+obj0_sub[4]['b'] == 6
+obj1_sub[4]['b'] == 7
+
+And if you don't like my printing style, you can get a programatic
+access to this information.
+
+>>> from charmonium.freeze import iterate_diffs
+>>> pprint(list(iterate_diffs(obj0, obj1)))
+[(ObjectLocation(labels=('obj0', '.__len__()'), objects=(..., 6)),
+  ObjectLocation(labels=('obj1', '.__len__()'), objects=(..., 5))),
+ (ObjectLocation(labels=('obj0', '[1]'), objects=(..., 1)),
+  ObjectLocation(labels=('obj1', '[1]'), objects=(..., 8))),
+ (ObjectLocation(labels=('obj0', '[3]', '.has()'), objects=(..., 4)),
+  ObjectLocation(labels=('obj1', '[3]', '.has()'), objects=(..., 'no such element'))),
+ (ObjectLocation(labels=('obj0', '[3]', '.has()'), objects=(..., 'no such element')),
+  ObjectLocation(labels=('obj1', '[3]', '.has()'), objects=(..., 5))),
+ (ObjectLocation(labels=('obj0', '[4]', '.keys()', '.has()'), objects=(..., 'c')),
+  ObjectLocation(labels=('obj1', '[4]', '.keys()', '.has()'), objects=(..., 'no such element'))),
+ (ObjectLocation(labels=('obj0', '[4]', '.keys()', '.has()'), objects=(..., 'no such element')),
+  ObjectLocation(labels=('obj1', '[4]', '.keys()', '.has()'), objects=(..., 'd'))),
+ (ObjectLocation(labels=('obj0', '[4]', "['b']"), objects=(..., 6)),
+  ObjectLocation(labels=('obj1', '[4]', "['b']"), objects=(..., 7)))]
 
 ---------
 Debugging
@@ -342,6 +429,16 @@ I do this to find the differences between subsequent runs:
     $ meld freeze.0.log freeze.1.log
     # Alternatively, use `icdiff` or `diff -u1`.
 
+----------
+Developing
+----------
+
+See `CONTRIBUTING.md`_ for instructions on setting up a development environment.
+
+.. _`CONTRIBUTING.md`: https://github.com/charmoniumQ/charmonium.freeze/tree/main/CONTRIBUTING.md
+
+
+----
 TODO
 ----
 
@@ -371,11 +468,10 @@ TODO
   - ☐ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what ``charmonium.determ_hash`` does. Use this configuration in ``charmonium.cache``.
   - ☐ Move "get call graph" into its own package.
   - ☐ Document configuration options.
-  - ☐ Document ``summarize_diff`` and ``iterate_diffs``.
+  - ☑ Document ``summarize_diff`` and ``iterate_diffs``.
   - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
-  - ☐ Config object should cascade with ``with config.set(a=b)``
-  - ☐ Bring hash into the same package, by having ``config.hash_only``. When ``True``, we return a single int, else a representation of the original object.
-    - I don't know. That makes it impossible to use the cache and memo. You don't know the hash of each thing.
+  - ☑ Config object should cascade with ``with config.set(a=b)``
+  - ☑ Bring hash into the same package, by having ``config.hash_only``. When ``True``, we return a single int, else a representation of the original object.
   - ☐ Bring object-diff into separate package.xo
 
 - ☑ Make ``freeze`` handle more types:
@@ -396,5 +492,5 @@ TODO
   - ☑ Memoize the hash of immutable data:
     - If function contains no locals or globals except other immutables, it is immutable.
     - If a collection is immutable and contains only immutables, it is immutable.
-  - ☐ Consider deprecating ``combine_frozen``.
   - ☑ Make performance benchmarks.
+  - ☐ Look into performance on attr classes.

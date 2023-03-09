@@ -4,36 +4,90 @@ import io
 import logging
 import pathlib
 import re
+import struct
 import types
 from typing import Any, Dict, Hashable, Optional, Tuple
 
 from .config import Config
-from .lib import _freeze, freeze_attrs, freeze_dispatch, freeze_sequence
+from .lib import freeze_attrs, freeze_dispatch, freeze_sequence
+from .util import int_to_bytes
 
 
 @freeze_dispatch.register(type(None))
-@freeze_dispatch.register(int)
-@freeze_dispatch.register(bytes)
-@freeze_dispatch.register(str)
-@freeze_dispatch.register(float)
-@freeze_dispatch.register(complex)
+def _(
+    obj: Any, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return 0, True, None
+    return obj, True, None
+
+
 @freeze_dispatch.register(type(...))
 def _(
     obj: Any, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    # Object is already hashable.
-    # No work to be done.
+    if config.use_hash:
+        return 1, True, None
     return obj, True, None
 
 
 @freeze_dispatch.register
 def _(
+    obj: int, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(int_to_bytes(obj)), True, None
+    return obj, True, None
+
+
+@freeze_dispatch.register
+def _(
+    obj: bytes, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(obj), True, None
+    return obj, True, None
+
+
+@freeze_dispatch.register
+def _(
+    obj: str, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(obj.encode()), True, None
+    return obj, True, None
+
+
+@freeze_dispatch.register
+def _(
+    obj: float, config: Config, tabu: Dict[int, Tuple[int, int]], depth: int, index: int
+) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(struct.pack("!d", obj)), True, None
+    return obj, True, None
+
+
+@freeze_dispatch.register
+def _(
+    obj: complex,
+    config: Config,
+    tabu: Dict[int, Tuple[int, int]],
+    depth: int,
+    index: int,
+) -> Tuple[Hashable, bool, Optional[int]]:
+    return freeze_sequence((obj.real, obj.imag), True, True, config, tabu, depth)
+
+
+@freeze_dispatch.register
+def _(
     obj: bytearray,
-    _config: Config,
+    config: Config,
     _tabu: Dict[int, Tuple[int, int]],
     _depth: int,
     _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(obj), False, None
     return bytes(obj), False, None
 
 
@@ -126,12 +180,12 @@ def _(
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     if config.ignore_extensions and not hasattr(obj, "__file__"):
-        return (obj.__name__, True, None)
+        return config.hasher(obj.__name__.encode()), True, None
     if hasattr(obj, "__file__") and any(
-            ancestor in config.ignore_files
-            for ancestor in pathlib.Path(obj.__file__).resolve().parents
+        ancestor in config.ignore_files
+        for ancestor in pathlib.Path(obj.__file__ or "/").resolve().parents
     ):
-        return (obj.__name__, True, None)
+        return config.hasher(obj.__name__.encode()), True, None
     attrs = {
         attr_name: getattr(obj, attr_name, None)
         for index, attr_name in enumerate(dir(obj))
@@ -151,6 +205,8 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(obj.tobytes()), False, None
     return obj.tobytes(), False, None
 
 
@@ -164,6 +220,8 @@ def _(
 ) -> Tuple[Hashable, bool, Optional[int]]:
     # The client should be able to change the logger without changing the computation.
     # But the _name_ of the logger specifies where the side-effect goes, so it should matter.
+    if config.use_hash:
+        return config.hasher(obj.name.encode()), True, None
     return obj.name, True, None
 
 
@@ -175,8 +233,18 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    ret = (obj.regs, _freeze(obj.re, config, tabu, depth, 0)[0], obj.string)
-    return ret, True, None
+    return freeze_attrs(
+        {
+            "regs": obj.regs,
+            "string": obj.string,
+            "re": obj.re,
+        },
+        is_immutable=True,
+        write_attrs=False,
+        config=config,
+        tabu=tabu,
+        depth=depth,
+    )
 
 
 @freeze_dispatch.register
@@ -187,6 +255,8 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(obj.getvalue()), False, None
     return obj.getvalue(), False, None
 
 
@@ -198,4 +268,6 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(obj.getvalue().encode()), False, None
     return obj.getvalue(), False, None

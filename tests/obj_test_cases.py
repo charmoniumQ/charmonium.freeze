@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import datetime
 import functools
-import inspect
 import io
 import logging
 import pathlib
@@ -15,13 +14,13 @@ import types
 from typing import Any, Generator, Generic, Iterator, List, Mapping, Type, TypeVar, cast
 
 import matplotlib.figure
+import module_example
 import numpy
 import pandas
-from tqdm import tqdm
 from charmonium.determ_hash import determ_hash
-from charmonium.freeze import freeze, global_config
-import module_example
+from tqdm import tqdm
 
+from charmonium.freeze import freeze, global_config
 
 _T = TypeVar("_T")
 _U = TypeVar("_U")
@@ -133,7 +132,7 @@ next(range10p1)
 
 
 class UnfreezableType:
-    def __getfrozenstate__(self):
+    def __getfrozenstate__(self) -> None:
         raise TypeError(
             "This is an unfreezable type. "
             "It should have never been tried to be frozen."
@@ -151,6 +150,7 @@ class WithGetFrozenState:
     """This _is_ freezable, but only by the custom __getfrozenstate__,
     not the default methods.
     """
+
     def __init__(self, value: int, other_value: Any) -> None:
         self._value = value
         self._other_value = other_value
@@ -161,16 +161,19 @@ class WithGetFrozenState:
 
 class CustomFreezableType:
     foo = unfreezable_obj
-    def __getfrozenstate__(self):
-        return None
+
+    def __getfrozenstate__(self) -> str:
+        return "hello"
 
 
-def ignored_function():
+def ignored_function() -> str:
     # This should be ignored, so unfreezable_obj should never be hit.
-    return str(unfrezable_obj)
+    return str(unfreezable_obj)
 
 
-global_config.ignore_functions.add((ignored_function.__module__, ignored_function.__name__))
+global_config.ignore_functions.add(
+    (ignored_function.__module__, ignored_function.__name__)
+)
 
 
 # pylint: disable=consider-using-with
@@ -194,6 +197,7 @@ non_equivalents: Mapping[str, Any] = {
     "lambda": [lambda: 1, lambda: 2, lambda: global0, lambda: global1],
     "builtin_function": [open, input],
     "code": [freeze.__code__, determ_hash.__code__],
+    "big int": [1 << 65, 2 << 65],
     "module": [pathlib, module_example],
     "range": [range(10), range(20)],
     "iterator": [iter(range(10)), range10p1],
@@ -202,7 +206,7 @@ non_equivalents: Mapping[str, Any] = {
         get_generator(10, 1, 0),
         get_generator(10, 1, 1),
     ],
-    "context manager": [
+    "contextmanager": [
         contextlib.contextmanager(generator)(1, 0),
         contextlib.contextmanager(generator)(1, 1),
     ],
@@ -264,10 +268,14 @@ non_equivalents: Mapping[str, Any] = {
     "datetime": [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 1, 1, 1)],
     "locky objects": [threading.Lock(), threading.RLock()],
     "cycle to different thing": [TreeNode.cycle_a(), TreeNode.cycle_b()],
-    "MappingProxyType": [types.MappingProxyType({"a": 3}), types.MappingProxyType({"a": 4})],
+    "MappingProxyType": [
+        types.MappingProxyType({"a": 3}),
+        types.MappingProxyType({"a": 4}),
+    ],
     # "Frame": [inspect.currentframe()],  # TODO
     # "ignored objects": [ignored_unfreezable_obj],  # TODO
     "TypeVar": [_T, _U],
+    "object": [object()],
 }
 
 
@@ -280,7 +288,7 @@ non_copyable_types = {
     "tqdm",
     "locky objects",
     "generator",
-    "context manager",
+    "contextmanager",
     "MappingProxyType",
     "Frame",
 }
@@ -309,7 +317,10 @@ equivalents: Mapping[str, List[Any]] = {
     "diff identical class": [get_class(3), get_class(3)],
     "instances of diff identical classes": [get_class(3)(), get_class(3)()],
     "dict with same order": [{"a": 1, "b": 2}, {"a": 1, "b": 2}],
-    "object with getfrozenstate": [WithGetFrozenState(3, unfreezable_obj), WithGetFrozenState(3, unfreezable_obj)],
+    "object with getfrozenstate": [
+        WithGetFrozenState(3, unfreezable_obj),
+        WithGetFrozenState(3, unfreezable_obj),
+    ],
     "logging.Logger": [logging.getLogger("a.b"), logging.getLogger("a.b")],
     "io.BytesIO": [io.BytesIO(b"abc"), io.BytesIO(b"abc")],
     "io.StringIO": [io.StringIO("abc"), io.StringIO("abc")],
@@ -329,7 +340,11 @@ equivalents: Mapping[str, List[Any]] = {
     "threading.RLock": [threading.RLock(), threading.RLock()],
     "timedelta": [datetime.timedelta(seconds=120), datetime.timedelta(minutes=2)],
     "tqdm": [tqdm(range(10), disable=True), tqdm(range(10), disable=True)],
-    "MappingProxyType": [types.MappingProxyType({"a": 3}), types.MappingProxyType({"a": 3})],
+    "MappingProxyType": [
+        types.MappingProxyType({"a": 3}),
+        types.MappingProxyType({"a": 3}),
+    ],
+    "object": [object(), object()],
 }
 
 # pylint: disable=consider-using-with
@@ -359,54 +374,55 @@ class BChild(B):
     # mutable because inherits B
 
 
-immutables: List[Any] = [
-    (),
-    frozenset(),
-    "hi",
-    b"hi",
-    ((), "hi", frozenset({"hello", "world"})),
-    object,
-    lambda: 314,
-    io,
-    str,
-    A,
-    AChild,
-    A(),
-    AChild(),
-]
+immutables: Mapping[str, Any] = {
+    "tuple": (),
+    "frozenset": frozenset(),
+    "str": "hi",
+    "bytes": b"hi",
+    "composition": ((), "hi", frozenset({"hello", "world"})),
+    "object": object,
+    "lambda": lambda: 314,
+    "module": io,
+    "builtin class": str,
+    "class": A,
+    "child class": AChild,
+    "instance": A(),
+    "child instance": AChild(),
+}
 
 
-non_immutables: List[Any] = [
-    [],
-    {},
-    set(),
-    (frozenset(), []),
-    B,
-    B(),
-    BChild,
-    BChild(),
-]
+non_immutables: Mapping[str, Any] = {
+    "list": [],
+    "dict": {},
+    "set": set(),
+    "immutable composition of mutables": (frozenset(), ([],)),
+    "class": B,
+    "instance": B(),
+    "child class": BChild,
+    "child instance": BChild(),
+}
 
 
 bytearray_size = 1024 * 1024
 nested_list_length = 2
 dtype = numpy.int32()
-deeply_nested_list_elems = bytearray_size // dtype.nbytes
+deeply_nested_list_elems = 1024 // dtype.nbytes
 deeply_nested_list = list(
-    numpy.arange(deeply_nested_list_elems, dtype=dtype)
-    .reshape((nested_list_length,) * int(numpy.log(deeply_nested_list_elems) / numpy.log(nested_list_length)))
+    numpy.arange(deeply_nested_list_elems, dtype=dtype).reshape(
+        (nested_list_length,)
+        * int(numpy.log(deeply_nested_list_elems) / numpy.log(nested_list_length))
+    )
 )
-    
+
 benchmark_cases: Mapping[str, Any] = {
-    # Interesting because they are slow
     "deeply nested list": deeply_nested_list,
     "function": insert_recurrence,
     "functools.partial": functools.partial(function_test, 3),
-
-    # Objects that are fast now, but may become troublesome in the future
     "module": [module_example],
     "path": [pathlib.Path("/hello/world/this/is/a/test")],
     "logger": [logging.getLogger("hello.world.this.is.a.test")],
     "generic": [List[int]],
-    "long bytearray": b"".join(bytes(range(255)) for _ in range(bytearray_size // bytearray_size)),
+    "long bytearray": b"".join(
+        bytes(range(255)) for _ in range(bytearray_size // bytearray_size)
+    ),
 }

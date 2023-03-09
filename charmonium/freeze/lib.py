@@ -8,6 +8,7 @@ import types
 from typing import Any, Collection, Dict, Hashable, List, Mapping, Optional, Tuple, cast
 
 from .config import Config, global_config
+from .util import circular_bit_shift, int_to_bytes, min_with_none_inf
 
 logger = logging.getLogger("charmonium.freeze")
 
@@ -88,12 +89,16 @@ def _freeze(
     # Check objects ignore by id
     if id(obj) in config.ignore_objects_by_id:
         logger.debug("%s ignoring object because of id %d", indent, id(obj))
+        if config.use_hash:
+            return 0, True, None
         return b"ignored by id", True, None
 
     # Check objects ignore by class
     type_pair = (obj.__class__.__module__, obj.__class__.__name__)
     if type_pair in config.ignore_objects_by_class:
         logger.debug("%s ignoring object because of class %s", " " * depth, type_pair)
+        if config.use_hash:
+            return _freeze(type_pair, config, tabu, depth + 1, 0)
         return type_pair, True, None
 
     # Check memo
@@ -103,6 +108,7 @@ def _freeze(
         return cached_result, True, None
 
     # Check tabu
+    ret: Hashable
     if id(obj) in tabu:
         depth2, index2 = tabu[id(obj)]
         obj_str = re.sub("0x[a-f0-9]*", "", str(obj))
@@ -114,12 +120,12 @@ def _freeze(
             index2,
             obj_str,
         )
+        if config.use_hash:
+            ret = config.hasher(obj_str.encode()) ^ (depth - depth2)
+        else:
+            ret = (b"cycle", obj_str, depth - depth2)
         return (
-            (
-                b"cycle",
-                obj_str,
-                depth - depth2,
-            ),
+            ret,
             True,
             None,
         )
@@ -148,6 +154,10 @@ def _freeze(
         and not isinstance(obj, types.LambdaType)
     ):
         config.memo[id(obj)] = ret
+
+    if logger.isEnabledFor(logging.DEBUG) and config.use_hash:
+        logger.debug("%s -> %s", indent, ret)
+
     return ret, is_immutable, ref_depth
 
 
@@ -165,19 +175,9 @@ def freeze_dispatch(
     )
 
 
-def min_with_none_inf(x: Optional[int], y: Optional[int]) -> Optional[int]:
-    """min of x and y, where None represents positive infinity."""
-    if x is None:
-        return y
-    elif y is None:
-        return x
-    else:
-        return min(x, y)
-
-
 def freeze_sequence(
     obj: Collection[Any],
-    obj_is_immutable: bool,
+    is_immutable: bool,
     order_matters: bool,
     config: Config,
     tabu: Dict[int, Tuple[int, int]],
@@ -185,7 +185,7 @@ def freeze_sequence(
 ) -> Tuple[Hashable, bool, Optional[int]]:
     """Freeze a sequence by freezing each element.
 
-    obj_is_immutable: pass True if the container you are seeking to
+    is_immutable: pass True if the container you are seeking to
        freeze should be considered "immutable", which is that it will
        not change during the program's execution (e.g., tuple). This
        determiniation permits caching its hash over the lifetime of
@@ -196,17 +196,36 @@ def freeze_sequence(
     order_matters: pass True if the object's order matters (e.g., for [] but not for set()).
 
     """
-    all_is_immutable = obj_is_immutable
+    all_is_immutable = is_immutable
     all_min_ref = None
-    frozen_elems: List[Any] = [None] * len(obj)
-    for index, elem in enumerate(obj):
-        frozen_elem, is_immutable, min_ref = _freeze(elem, config, tabu, depth, index)
-        frozen_elems[index] = frozen_elem
-        all_is_immutable = all_is_immutable and is_immutable
-        all_min_ref = min_with_none_inf(all_min_ref, min_ref)
-    ret = cast(
-        Hashable, tuple(frozen_elems) if order_matters else frozenset(frozen_elems)
-    )
+    ret: Hashable
+    if config.use_hash:
+        ret = 0
+        for index, elem in enumerate(obj):
+            frozen_elem, is_immutable, min_ref = _freeze(
+                elem, config, tabu, depth, index
+            )
+            if order_matters:
+                ret = config.hasher(int_to_bytes(ret) + int_to_bytes(cast(int, frozen_elem)))
+                # ret ^= circular_bit_shift(cast(int, frozen_elem), index, config.hash_length)
+            else:
+                ret ^= cast(int, frozen_elem)
+            all_is_immutable = all_is_immutable and is_immutable
+            all_min_ref = min_with_none_inf(all_min_ref, min_ref)
+    else:
+        frozen_elems: List[Any] = [None] * len(obj)
+        for index, elem in enumerate(obj):
+            frozen_elem, is_immutable, min_ref = _freeze(
+                elem, config, tabu, depth, index
+            )
+            frozen_elems[index] = frozen_elem
+            all_is_immutable = all_is_immutable and is_immutable
+            all_min_ref = min_with_none_inf(all_min_ref, min_ref)
+        ret = (
+            cast(Hashable, tuple(frozen_elems))
+            if order_matters
+            else frozenset(frozen_elems)
+        )
     return ret, all_is_immutable, all_min_ref
 
 
@@ -215,7 +234,7 @@ un_reassignable_types = (type, types.FunctionType, types.ModuleType)
 
 def freeze_attrs(
     obj: Mapping[str, Any],
-    obj_is_immutable: bool,
+    is_immutable: bool,
     write_attrs: bool,
     config: Config,
     tabu: Dict[int, Tuple[int, int]],
@@ -223,7 +242,7 @@ def freeze_attrs(
 ) -> Tuple[Hashable, bool, Optional[int]]:
     """Freeze an Mapping[str, Any], by freezing each element.
 
-    obj_is_immutable: See the same argument in freeze_sequence.
+    is_immutable: See the same argument in freeze_sequence.
 
     write_attrs: Set to True to write the attributes in the frozen
         result. Otherwise, we can assume that other objects will have
@@ -233,24 +252,41 @@ def freeze_attrs(
 
     """
     all_min_ref = None
-    all_is_immutable = obj_is_immutable
-    frozen_items: List[Any] = [None] * len(obj)
-    # sorted so we iterate over the members in a consistent order.
-    for index, (key, val) in enumerate(sorted(obj.items())):
-        logger.debug("%s %s", " " * depth, key)
-        frozen_val, is_immutable, min_ref = _freeze(val, config, tabu, depth, index)
-        frozen_items[index] = (key, frozen_val) if write_attrs else frozen_val
-        if min_ref is not None:
-            all_min_ref = min_with_none_inf(min_ref, all_min_ref)
-        all_is_immutable = all_is_immutable and is_immutable
-    return tuple(frozen_items), all_is_immutable, all_min_ref
+    all_is_immutable = is_immutable
+    ret: Hashable
+    if config.use_hash:
+        ret = 0
+        for index, (key, val) in enumerate(obj.items()):
+            if write_attrs:
+                ret ^= config.hasher(key.encode())
+            frozen_val, is_immutable, min_ref = _freeze(val, config, tabu, depth, index)
+            ret ^= cast(int, frozen_val)
+            if min_ref is not None:
+                all_min_ref = min_with_none_inf(min_ref, all_min_ref)
+            all_is_immutable = all_is_immutable and is_immutable
+    else:
+        frozen_items: List[Any] = [None] * len(obj)
+        # sorted so we iterate over the members in a consistent order.
+        for index, (key, val) in enumerate(sorted(obj.items())):
+            frozen_val, is_immutable, min_ref = _freeze(val, config, tabu, depth, index)
+            frozen_items[index] = (key, frozen_val) if write_attrs else frozen_val
+            if min_ref is not None:
+                all_min_ref = min_with_none_inf(min_ref, all_min_ref)
+            all_is_immutable = all_is_immutable and is_immutable
+        ret = tuple(frozen_items)
+    return ret, all_is_immutable, all_min_ref
 
 
 def combine_frozen(
-    t0: Tuple[Hashable, bool, Optional[int]], t1: Tuple[Hashable, bool, Optional[int]]
-) -> Tuple[Tuple[Hashable, ...], bool, Optional[int]]:
-    if isinstance(t0[0], tuple) and isinstance(t1[0], tuple):
-        ret = (*t0[0], *t1[0])
+    t0: Tuple[Hashable, bool, Optional[int]],
+    t1: Tuple[Hashable, bool, Optional[int]],
+    config: Config,
+) -> Tuple[Hashable, bool, Optional[int]]:
+    ret: Hashable
+    if config.use_hash:
+        ret = cast(int, t0[0]) ^ circular_bit_shift(
+            cast(int, t1[0]), 1, config.hash_length
+        )
     else:
         ret = (t0[0], t1[0])
     return (

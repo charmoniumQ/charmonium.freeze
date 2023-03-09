@@ -15,8 +15,9 @@ from .lib import _freeze as _freeze
 from .lib import freeze as freeze
 from .lib import freeze_dispatch as _freeze_dispatch
 from .summarize_diff import ObjectLocation as ObjectLocation
+from .summarize_diff import iterate_diffs as iterate_diffs
 from .summarize_diff import iterate_diffs_of_frozen as iterate_diffs_of_frozen
-from .summarize_diff import summarize_diff as summarize_diff
-from .summarize_diff import summarize_diff_of_frozen as summarize_diff_of_frozen
+from .summarize_diff import summarize_diffs as summarize_diffs
+from .summarize_diff import summarize_diffs_of_frozen as summarize_diffs_of_frozen
 
 __version__ = "0.7.1"

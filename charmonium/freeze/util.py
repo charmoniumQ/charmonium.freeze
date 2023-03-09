@@ -5,16 +5,7 @@ import dis
 import inspect
 import pathlib
 import types
-from typing import (
-    Any,
-    Callable,
-    Iterable,
-    NamedTuple,
-    Optional,
-    TypeVar,
-    cast,
-)
-
+from typing import Any, Callable, Iterable, NamedTuple, Optional, TypeVar, cast
 
 _T = TypeVar("_T")
 
@@ -169,3 +160,29 @@ def common_prefix(it0: Iterable[_T], it1: Iterable[_T]) -> tuple[_T, ...]:
         else:
             break
     return ret
+
+
+def circular_bit_shift(integer: int, shift_amount: int, integer_size: int) -> int:
+    assert integer >= 0 and integer_size > 0
+    shift_amount = ((shift_amount % integer_size) + integer_size) % integer_size
+    return ((integer << shift_amount) & ((1 << integer_size) - 1)) | (
+        integer >> (integer_size - shift_amount)
+    )
+
+
+def min_with_none_inf(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    """min of x and y, where None represents positive infinity."""
+    if x is None:
+        return y
+    elif y is None:
+        return x
+    else:
+        return min(x, y)
+
+
+def int_to_bytes(obj: int) -> bytes:
+    return obj.to_bytes(
+        length=(8 + (obj + (obj < 0)).bit_length()) // 8,
+        byteorder="big",
+        signed=True,
+    )

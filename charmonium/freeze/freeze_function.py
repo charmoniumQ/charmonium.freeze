@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import types
 from pathlib import Path
-from typing import Any, Dict, Hashable, Optional, Tuple, cast
+from typing import Any, Dict, Hashable, Optional, Tuple
 
 from . import util
 from .config import Config
-from .lib import combine_frozen, freeze_attrs, freeze_dispatch, freeze_sequence, logger
+from .lib import freeze_attrs, freeze_dispatch, freeze_sequence, logger
 
 
 @freeze_dispatch.register
@@ -20,9 +20,12 @@ def _(
     type_pair = (obj.__module__, obj.__name__)
     if type_pair in config.ignore_functions:
         logger.debug("%s ignoring %s", " " * depth, type_pair)
-        return type_pair, True, None
+        return freeze_sequence(type_pair, True, True, config, tabu, depth)
+    else:
+        logger.debug("%s not ignoring %s (not in %s)", " " * depth, type_pair, config.ignore_functions)
     closure = util.get_closure_attrs(obj)
-    ret = freeze_code(obj.__code__, config, tabu, depth, index)
+    attrs: Dict[str, Any] = {}
+    attrs["code"] = obj.__code__
     myglobals = {
         ".".join((var_name, *attr_path)): val
         for var_name, attr_path, _, val in closure.myglobals
@@ -30,9 +33,7 @@ def _(
         and (not attr_path or (var_name, attr_path[0]) not in config.ignore_globals)
     }
     if myglobals:
-        ret = combine_frozen(
-            ret, freeze_attrs(myglobals, True, True, config, tabu, depth)
-        )
+        attrs["globals"] = myglobals
     nonlocals = {
         ".".join((var_name, *attr_path)): val
         for var_name, attr_path, _, val in closure.nonlocals
@@ -45,10 +46,8 @@ def _(
         )
     }
     if nonlocals:
-        ret = combine_frozen(
-            ret, freeze_attrs(nonlocals, True, True, config, tabu, depth)
-        )
-    return (b"function", *cast(Tuple[Any], ret[0])), ret[1], ret[2]
+        attrs["nonlocals"] = nonlocals
+    return freeze_attrs(attrs, True, False, config, tabu, depth)
 
 
 @freeze_dispatch.register
@@ -74,17 +73,13 @@ def freeze_code(
         util.is_relative_to(source_loc, constant_file)
         for constant_file in config.ignore_files
     ):
-        return (
-            (
-                b"builtin code",
-                obj.co_name,
-            ),
-            True,
-            None,
-        )
-    else:
-        ret = freeze_sequence(obj.co_consts, True, True, config, tabu, depth)
-        return (obj.co_name, obj.co_code, ret[0]), ret[1], ret[2]
+        if config.use_hash:
+            return config.hasher(obj.co_name.encode()), True, None
+        else:
+            return obj.co_name, True, None
+    return freeze_sequence(
+        (obj.co_name, *obj.co_consts, obj.co_code), True, True, config, tabu, depth
+    )
 
 
 @freeze_dispatch.register
@@ -105,22 +100,35 @@ def freeze_frame(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    ret = combine_frozen(
-        freeze_code(obj.f_code, config, tabu, depth, index),
-        freeze_attrs(obj.f_locals, True, True, config, tabu, depth),
+    return freeze_sequence(
+        (obj.f_code, obj.f_locals, obj.f_lasti),
+        is_immutable=True,
+        order_matters=True,
+        config=config,
+        tabu=tabu,
+        depth=depth,
     )
-    return (b"frame", *ret[0], obj.f_lasti), ret[1], ret[2]
+    # return freeze_sequence(
+    #     (obj.f_code, obj.f_locals, obj.f_lasti),
+    #     is_immutable=True,
+    #     order_matters=True,
+    #     config=config,
+    #     tabu=tabu,
+    #     depth=depth,
+    # )
 
 
 @freeze_dispatch.register
 def _(
     obj: types.BuiltinFunctionType,
-    _config: Config,
+    config: Config,
     _tabu: Dict[int, Tuple[int, int]],
     _depth: int,
     _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    return ("builtin func", obj.__name__), True, None
+    if config.use_hash:
+        return config.hasher(obj.__name__.encode()), True, None
+    return obj.__name__, True, None
 
 
 @freeze_dispatch.register(types.GeneratorType)

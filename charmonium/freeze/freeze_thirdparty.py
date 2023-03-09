@@ -5,7 +5,7 @@ import pickle
 from typing import Any, Dict, Hashable, Optional, Tuple
 
 from .config import Config
-from .lib import UnfreezableTypeError, freeze_dispatch
+from .lib import UnfreezableTypeError, freeze_dispatch, freeze_sequence
 
 try:
     import numpy
@@ -21,7 +21,14 @@ else:
         depth: int,
         index: int,
     ) -> Tuple[Hashable, bool, Optional[int]]:
-        return ("numpy.ndarray", obj.tobytes(), str(obj.dtype)), False, None
+        return freeze_sequence(
+            (str(obj.dtype), obj.tobytes()),
+            is_immutable=False,
+            order_matters=True,
+            config=config,
+            tabu=tabu,
+            depth=depth,
+        )
 
 
 try:
@@ -33,13 +40,15 @@ else:
     @freeze_dispatch.register
     def _(
         obj: matplotlib.figure.Figure,
-        _config: Config,
+        config: Config,
         _tabu: Dict[int, Tuple[int, int]],
         _depth: int,
         _index: int,
     ) -> Tuple[Hashable, bool, Optional[int]]:
         file = io.BytesIO()
         obj.savefig(file, format="raw")
+        if config.use_hash:
+            return config.hasher(file.getvalue()), False, None
         return file.getvalue(), False, None
 
 
@@ -59,7 +68,9 @@ else:
         depth: int,
         index: int,
     ) -> Tuple[Hashable, bool, Optional[int]]:
-        return pickle.dumps(obj), True, None
+        if config.use_hash:
+            return config.hasher(pickle.dumps(obj)), False, None
+        return pickle.dumps(obj), False, None
 
 
 # TODO: See if we can support this anyway.

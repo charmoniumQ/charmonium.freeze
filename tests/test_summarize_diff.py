@@ -4,15 +4,15 @@ from charmonium.freeze import Config
 from charmonium.freeze import ObjectLocation as OL
 from charmonium.freeze import freeze
 from charmonium.freeze import iterate_diffs_of_frozen as idof
-from charmonium.freeze import summarize_diff
+from charmonium.freeze import summarize_diffs as sdof
 
-config = Config(ignore_dict_order=True)
-obj0 = freeze([0, 1, 2, {3, 4}, {"a": 5, "b": 6, "c": 7}, 8], config)
-obj1 = freeze([0, 8, 2, {3, 5}, {"a": 5, "b": 7, "d": 8}], config)
+config = Config(ignore_dict_order=True, use_hash=False)
+frozen_obj0 = freeze([0, 1, 2, {3, 4}, {"a": 5, "b": 6, "c": 7}, 8], config)
+frozen_obj1 = freeze([0, 8, 2, {3, 5}, {"a": 5, "b": 7, "d": 8}], config)
 
 
 def test_iterate_diffs_of_frozen() -> None:
-    differences = list(idof(OL.create(0, obj0), OL.create(1, obj1)))
+    differences = list(idof(frozen_obj0, frozen_obj1))
     assert differences[0][0].labels == ("obj0", ".__len__()")
     assert differences[1][0].labels == ("obj0", "[1]")
     assert differences[2][0].labels == ("obj0", "[3]", ".has()")
@@ -21,11 +21,12 @@ def test_iterate_diffs_of_frozen() -> None:
     assert differences[5][0].labels == ("obj0", "[4]", ".keys()", ".has()")
     assert differences[6][0].labels == ("obj0", "[4]", "['b']")
     assert len(differences) == 7
-    config.ignore_dict_order = False
 
 
 def test_summarize_diff() -> None:
-    assert summarize_diff(obj0, obj1, config).split("\n") == [
+    assert sdof(frozen_obj0, frozen_obj1).split("\n") == [
+        "let obj0_sub = obj0",
+        "let obj1_sub = obj1",
         "obj0_sub.__len__() == 6",
         "obj1_sub.__len__() == 5",
         "obj0_sub[1] == 1",
@@ -41,7 +42,6 @@ def test_summarize_diff() -> None:
         "obj0_sub[4]['b'] == 6",
         "obj1_sub[4]['b'] == 7",
     ]
-    config.ignore_dict_order = False
 
 
 def test_summarize_diff_recursive() -> None:
@@ -55,6 +55,4 @@ def test_summarize_diff_recursive() -> None:
     a1.child = Struct()
     a1.child.child = a1.child
     assert len(list(idof(OL.create(0, freeze(a0)), OL.create(1, freeze(a1))))) == 1
-    assert (
-        len(list(idof(OL.create(0, frozenset({})), OL.create(1, frozenset({}))))) == 0
-    )
+    assert not list(idof(frozenset({}), frozenset({})))

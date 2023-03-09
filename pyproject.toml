@@ -28,8 +28,8 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 
 [tool.pytest.ini_options]
-addopts = "--quiet --numprocesses=auto --doctest-modules --doctest-glob='*.rst' --benchmark-disable --benchmark-storage=build/benchmark"
-# pytest -k test_benchmark --benchmark-enable --numprocesses 0
+addopts = "--quiet --numprocesses=0 --doctest-glob='*.rst' --doctest-modules --benchmark-disable --durations=20"
+# pytest --benchmark-enable --benchmark-storage=build/benchmark --benchmark-only --numprocesses 0
 
 [tool.coverage.run]
 branch = true
@@ -111,7 +111,6 @@ types-termcolor = "^1.1.3"
 matplotlib = "^3.5.1"
 pandas = "^1.4.1"
 numpy = "^1.22.3"
-"charmonium.determ-hash" = "^0.2.2"
 icecream = "^2.1.2"
 autoflake = "^1.7.7"
 ruff = "^0.0.253"
