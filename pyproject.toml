@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "charmonium.freeze"
-version = "0.8.0"
+version = "0.8.1"
 description = "Injectively, deterministically maps arbitrary objects to hashable values"
 authors = ["Samuel Grayson <sam+dev@samgrayson.me>"]
 license = "MIT"
@@ -62,7 +62,7 @@ mypy_path = "stubs"
 disable_error_code = "no-redef"
 
 [tool.bump2version]
-current_version = "0.8.0"
+current_version = "0.8.1"
 commit = true
 tag = true
 
