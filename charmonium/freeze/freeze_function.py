@@ -21,8 +21,6 @@ def _(
     if type_pair in config.ignore_functions:
         logger.debug("%s ignoring %s", " " * depth, type_pair)
         return freeze_sequence(type_pair, True, True, config, tabu, depth)
-    else:
-        logger.debug("%s not ignoring %s (not in %s)", " " * depth, type_pair, config.ignore_functions)
     closure = util.get_closure_attrs(obj)
     attrs: Dict[str, Any] = {}
     attrs["code"] = obj.__code__

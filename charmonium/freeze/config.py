@@ -35,7 +35,7 @@ class Config:
         else:
             raise AttributeError(f"{attr} does not exist on {self.__class__.__name__}")
 
-    recursion_limit: Optional[int] = 150
+    recursion_limit: Optional[int] = 50
 
     ignore_module_attrs: Set[str] = field(
         default_factory=lambda: {
@@ -168,11 +168,13 @@ class Config:
     # result computation.
     ignore_classes: Set[Tuple[str, Optional[str]]] = field(
         default_factory=lambda: {
+            # TODO: [research] See if we can reduce these
             ("tqdm.std", "tqdm"),
             ("re", "RegexFlag"),
-            # TODO: [research] Remove these when we have caching and integer stuff
-            # They are purely performance (not correctness)
-            # ("pathlib", None),
+            ("re", "Pattern"),
+            # ("pathlib", "_PosixFlavour"),
+            # ("pathlib", "_WindowsFlavour"),
+            ("pathlib", None),
             ("builtins", None),
             ("ABC", None),
             ("ABCMeta", None),
@@ -189,7 +191,12 @@ class Config:
     # Put ``(function.__module__, function.__name__)`` of functions whose source
     # code and class attributes never change or those changes are not relevant
     # to the resulting computation.
-    ignore_functions: Set[Tuple[str, str]] = field(default_factory=set)
+    ignore_functions: Set[Tuple[str, str]] = field(default_factory=lambda: {
+        ("re", "_compile"),
+        ("re", "escape"),
+        ("urllib.parse", "quote_from_bytes"),
+        ("charmonium.freeze.lib", "freeze"),
+    })
 
     # Whether to ignore modules that are a C extension.
     # These are modules that have no __file__ attribute.

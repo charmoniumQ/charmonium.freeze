@@ -67,7 +67,10 @@ def _freeze(
 ) -> Tuple[Hashable, bool, Optional[int]]:
     # Check recursion limit
     if config.recursion_limit is not None and depth > config.recursion_limit:
-        raise FreezeRecursionError(f"Maximum recursion depth {config.recursion_limit}")
+        raise FreezeRecursionError(
+            f"Maximum recursion depth {config.recursion_limit}. "
+            "See <https://github.com/charmoniumQ/charmonium.freeze#debugging> for debugging help"
+        )
 
     # Write log
     indent = depth * " "

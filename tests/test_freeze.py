@@ -36,6 +36,8 @@ configs = {
 }
 configs[True].use_hash = True
 configs[False].use_hash = False
+configs[True].recursion_limit = 20
+configs[False].recursion_limit = 20
 
 
 @pytest.mark.parametrize("input_kind", immutables.keys())

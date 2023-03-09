@@ -280,9 +280,9 @@ non-deterministic values. In this case, there are three remedies:
   ...     # I have included them here for clarity.
   ... 
   ...     # `tabu` is for object cycle detection. It is handled for you.
-  ...     # `level` is for logging and recursion limits.
+  ...     # `level` is for logging and recursion limits. It is incremented for you.
   ...     # `index` is the "birth order" of the children.
-  ...     frozen_greeting = _freeze(obj.greeting, config, tabu, level + 1, 0)
+  ...     frozen_greeting = _freeze(obj.greeting, config, tabu, level, 0)
   ... 
   ...     return (
   ...         frozen_greeting[0],

@@ -17,7 +17,6 @@ import matplotlib.figure
 import module_example
 import numpy
 import pandas
-from charmonium.determ_hash import determ_hash
 from tqdm import tqdm
 
 from charmonium.freeze import freeze, global_config
@@ -81,6 +80,14 @@ def _(_obj: int) -> int:
 
 def function_test(obj: int) -> int:
     return obj
+
+
+cached_function_test0 = functools.lru_cache(function_test)
+cached_function_test1 = functools.lru_cache(function_test)
+cached_function_test2 = functools.lru_cache(single_dispatch_test)
+cached_function_test0(3)
+cached_function_test1(4)
+# 0 and 1 are equiv; 2 is diff
 
 
 def get_class(i: int) -> Type[Any]:
@@ -190,13 +197,13 @@ non_equivalents: Mapping[str, Any] = {
     "dict with diff order": [{"a": 1, "b": 2}, {"b": 2, "a": 1}],
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
     # TODO: add freeze to functools.singledispatch
-    "functools.singledispatch": [single_dispatch_test, determ_hash],
+    "functools.singledispatch": [single_dispatch_test, get_generator],
     "function": [cast, tqdm, *dir(tempfile), ignored_function],
     "unbound methods": [ClassWithStaticMethod.foo, ClassWithStaticMethod.baz],
     "bound methods": [ClassWithStaticMethod.bar, ClassWithStaticMethod().baz],
     "lambda": [lambda: 1, lambda: 2, lambda: global0, lambda: global1],
     "builtin_function": [open, input],
-    "code": [freeze.__code__, determ_hash.__code__],
+    "code": [freeze.__code__, get_generator.__code__],
     "big int": [1 << 65, 2 << 65],
     "module": [pathlib, module_example],
     "range": [range(10), range(20)],
@@ -210,6 +217,7 @@ non_equivalents: Mapping[str, Any] = {
         contextlib.contextmanager(generator)(1, 0),
         contextlib.contextmanager(generator)(1, 1),
     ],
+    "functools.lru_cache": [cached_function_test0, cached_function_test2],
     "logger": [logging.getLogger("a.b"), logging.getLogger("a.c")],
     "type": [List[int], List[float], ClassWithStaticMethod],
     "slotted object": [WithSlots(1, 2), WithSlots(1, 3)],
@@ -336,6 +344,7 @@ equivalents: Mapping[str, List[Any]] = {
         functools.partial(function_test, 3),
         functools.partial(function_test, 3),
     ],
+    "functools.lru_cache": [cached_function_test0, cached_function_test1],
     "threading.Lock": [threading.Lock(), threading.Lock()],
     "threading.RLock": [threading.RLock(), threading.RLock()],
     "timedelta": [datetime.timedelta(seconds=120), datetime.timedelta(minutes=2)],
