@@ -172,8 +172,6 @@ class Config:
             ("tqdm.std", "tqdm"),
             ("re", "RegexFlag"),
             ("re", "Pattern"),
-            # ("pathlib", "_PosixFlavour"),
-            # ("pathlib", "_WindowsFlavour"),
             ("pathlib", None),
             ("builtins", None),
             ("ABC", None),

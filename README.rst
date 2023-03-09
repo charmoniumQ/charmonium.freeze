@@ -350,21 +350,23 @@ And if you don't like my printing style, you can get a programatic
 access to this information.
 
 >>> from charmonium.freeze import iterate_diffs
->>> pprint(list(iterate_diffs(obj0, obj1)))
-[(ObjectLocation(labels=('obj0', '.__len__()'), objects=(..., 6)),
-  ObjectLocation(labels=('obj1', '.__len__()'), objects=(..., 5))),
- (ObjectLocation(labels=('obj0', '[1]'), objects=(..., 1)),
-  ObjectLocation(labels=('obj1', '[1]'), objects=(..., 8))),
- (ObjectLocation(labels=('obj0', '[3]', '.has()'), objects=(..., 4)),
-  ObjectLocation(labels=('obj1', '[3]', '.has()'), objects=(..., 'no such element'))),
- (ObjectLocation(labels=('obj0', '[3]', '.has()'), objects=(..., 'no such element')),
-  ObjectLocation(labels=('obj1', '[3]', '.has()'), objects=(..., 5))),
- (ObjectLocation(labels=('obj0', '[4]', '.keys()', '.has()'), objects=(..., 'c')),
-  ObjectLocation(labels=('obj1', '[4]', '.keys()', '.has()'), objects=(..., 'no such element'))),
- (ObjectLocation(labels=('obj0', '[4]', '.keys()', '.has()'), objects=(..., 'no such element')),
-  ObjectLocation(labels=('obj1', '[4]', '.keys()', '.has()'), objects=(..., 'd'))),
- (ObjectLocation(labels=('obj0', '[4]', "['b']"), objects=(..., 6)),
-  ObjectLocation(labels=('obj1', '[4]', "['b']"), objects=(..., 7)))]
+>>> for o1, o2 in iterate_diffs(obj0, obj1):
+...    print(o1, o2, sep="\n")
+ObjectLocation(labels=('obj0', '.__len__()'), objects=(..., 6))
+ObjectLocation(labels=('obj1', '.__len__()'), objects=(..., 5))
+ObjectLocation(labels=('obj0', '[1]'), objects=(..., 1))
+ObjectLocation(labels=('obj1', '[1]'), objects=(..., 8))
+ObjectLocation(labels=('obj0', '[3]', '.has()'), objects=(...), 4))
+ObjectLocation(labels=('obj1', '[3]', '.has()'), objects=(..., 'no such element'))
+ObjectLocation(labels=('obj0', '[3]', '.has()'), objects=(...), 'no such element'))
+ObjectLocation(labels=('obj1', '[3]', '.has()'), objects=(..., 5))
+ObjectLocation(labels=('obj0', '[4]', '.keys()', '.has()'), objects=(..., 'c'))
+ObjectLocation(labels=('obj1', '[4]', '.keys()', '.has()'), objects=(..., 'no such element'))
+ObjectLocation(labels=('obj0', '[4]', '.keys()', '.has()'), objects=(..., 'no such element'))
+ObjectLocation(labels=('obj1', '[4]', '.keys()', '.has()'), objects=(..., 'd'))
+ObjectLocation(labels=('obj0', '[4]', "['b']"), objects=(..., 6))
+ObjectLocation(labels=('obj1', '[4]', "['b']"), objects=(..., 7))
+
 
 ---------
 Debugging
@@ -428,6 +430,11 @@ I do this to find the differences between subsequent runs:
 
     $ meld freeze.0.log freeze.1.log
     # Alternatively, use `icdiff` or `diff -u1`.
+
+If ``freeze(obj)`` is taking a long time, try adding ``freeze(obj,
+Config(recursion_limit=20))``. This causes an exception if ``freeze`` recurses
+more than a certain number of times. If you hit this exception, consider adding
+ignored class, functions, attributes, or objects in ``Config``.
 
 ----------
 Developing
