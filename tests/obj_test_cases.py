@@ -30,6 +30,10 @@ def insert_recurrence(lst: List[Any], idx: int) -> List[Any]:
     return lst
 
 
+class GenericClass(Generic[_T]):
+    pass
+
+
 class WithProperties:
     def __init__(self, value: int) -> None:
         self._attrib = value
@@ -219,7 +223,7 @@ non_equivalents: Mapping[str, Any] = {
     ],
     "functools.lru_cache": [cached_function_test0, cached_function_test2],
     "logger": [logging.getLogger("a.b"), logging.getLogger("a.c")],
-    "type": [List[int], List[float], ClassWithStaticMethod],
+    "type": [int, ClassWithStaticMethod],
     "slotted object": [WithSlots(1, 2), WithSlots(1, 3)],
     "class": [WithProperties, WithGetFrozenState, WithSlots],
     "diff classes with same name": [get_class(3), get_class(4)],
@@ -284,6 +288,12 @@ non_equivalents: Mapping[str, Any] = {
     # "ignored objects": [ignored_unfreezable_obj],  # TODO
     "TypeVar": [_T, _U],
     "object": [object()],
+    "parameterized_generics": [
+        (list[int] if sys.version_info.minor >= 9 else List[int]),
+        (list[float] if sys.version_info.minor >= 9 else List[float]),
+        GenericClass[int],
+        GenericClass[float],
+    ],
 }
 
 
@@ -354,6 +364,7 @@ equivalents: Mapping[str, List[Any]] = {
         types.MappingProxyType({"a": 3}),
     ],
     "object": [object(), object()],
+    "parameterized generics": [GenericClass[int], GenericClass[int]],
 }
 
 # pylint: disable=consider-using-with

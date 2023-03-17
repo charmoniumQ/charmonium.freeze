@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import types
@@ -14,6 +15,35 @@ from .lib import (
 )
 
 
+# Note that
+#
+#    nix shell nixpkgs#python310 --command python -c 'print(set[int].__class__)'
+#    <class 'type'>
+#
+# while
+#
+#    nix shell nixpkgs#python310 --command python -c 'print(set[int].__class__)'
+#    <class 'types.GenericAlias'>
+#
+# (as it should)
+# Therefore, singledispatch doesn't dispatch generic aliases correctly until 3.11
+def freeze_generic_alias(
+    obj: types.GenericAlias,
+    config: Config,
+    tabu: Dict[int, Tuple[int, int]],
+    depth: int,
+    index: int,
+) -> Tuple[Hashable, bool, Optional[int]]:
+    return freeze_sequence(
+        (obj.__origin__, *obj.__args__),
+        order_matters=True,
+        is_immutable=True,
+        config=config,
+        tabu=tabu,
+        depth=depth,
+    )
+
+
 @freeze_dispatch.register(type)
 def _(
     obj: Type[Any],
@@ -22,6 +52,8 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    if hasattr(obj, "__origin__") and hasattr(obj, "__args__"):
+        return freeze_generic_alias(obj, config, tabu, depth, index)
     assert obj == obj.__mro__[0]
     ret = freeze_class(obj.__mro__[0], config, tabu, depth, index)
     if len(obj.__mro__) > 1:
