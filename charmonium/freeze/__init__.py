@@ -20,4 +20,4 @@ from .summarize_diff import iterate_diffs_of_frozen as iterate_diffs_of_frozen
 from .summarize_diff import summarize_diffs as summarize_diffs
 from .summarize_diff import summarize_diffs_of_frozen as summarize_diffs_of_frozen
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
