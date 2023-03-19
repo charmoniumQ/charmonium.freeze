@@ -288,12 +288,13 @@ non_equivalents: Mapping[str, Any] = {
     # "ignored objects": [ignored_unfreezable_obj],  # TODO
     "TypeVar": [_T, _U],
     "object": [object()],
-    "parameterized_generics": [
+    "types.GenericAlias": [
         (list[int] if sys.version_info.minor >= 9 else List[int]),
         (list[float] if sys.version_info.minor >= 9 else List[float]),
         GenericClass[int],
         GenericClass[float],
     ],
+    "types.GenericAlias2": [types.GenericAlias],
 }
 
 

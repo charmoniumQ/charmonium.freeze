@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import types
@@ -52,7 +51,7 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    if hasattr(obj, "__origin__") and hasattr(obj, "__args__"):
+    if hasattr(obj, "__origin__") and hasattr(obj, "__args__") and obj is not types.GenericAlias:
         return freeze_generic_alias(obj, config, tabu, depth, index)
     assert obj == obj.__mro__[0]
     ret = freeze_class(obj.__mro__[0], config, tabu, depth, index)
