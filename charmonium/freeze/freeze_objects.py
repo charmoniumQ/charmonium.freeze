@@ -18,7 +18,10 @@ def freeze_pickle(
     if type(obj) in dispatch_table:
         reduced = dispatch_table[type(obj)](obj)
     elif reduce_ex_method:
-        reduced = reduce_ex_method(4)
+        try:
+            reduced = reduce_ex_method(4)
+        except TypeError:
+            return None
     elif reduce_method:
         reduced = reduce_method()
     else:
