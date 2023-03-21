@@ -32,4 +32,4 @@ jobs:
           nix develop --command python -c 'import sys; print("\n".join(sys.path))'
           ls -al
 
-      - run: nix develop --command ./script.py all-tests --no-interactive
+      - run: nix develop --command ./script.py test
