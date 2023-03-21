@@ -476,8 +476,10 @@ TODO
   - ☐ Move "get call graph" into its own package.
   - ☐ Document configuration options.
   - ☑ Document ``summarize_diff`` and ``iterate_diffs``.
-  - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
   - ☑ Config object should cascade with ``with config.set(a=b)``
+  - ☐ Make it possible to ignore classes and functions by their package, rather than just module.
+  - ☐ Use the class name when deciding whether to ignore a method (currently we just use the methods __module__ and __name__).
+  - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
 
 - ☑ Make ``freeze`` handle more types:
 
