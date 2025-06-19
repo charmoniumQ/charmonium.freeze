@@ -180,8 +180,8 @@ def _(
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     value = (
-        getattr(obj, "__name__"),
-        getattr(obj, "__version__")
+        getattr(obj, "__name__", ""),
+        getattr(obj, "__version__", "")
     )
     if config.ignore_extensions and not hasattr(obj, "__file__"):
         return freeze_sequence(value, True, True, config, tabu, depth)
