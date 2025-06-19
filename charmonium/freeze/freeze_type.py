@@ -52,7 +52,7 @@ def _(
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     if hasattr(obj, "__origin__") and hasattr(obj, "__args__") and obj is not types.GenericAlias:
-        return freeze_generic_alias(obj, config, tabu, depth, index)
+        return freeze_generic_alias(obj, config, tabu, depth, index)  # type: ignore
     assert obj == obj.__mro__[0]
     ret = freeze_class(obj.__mro__[0], config, tabu, depth, index)
     if len(obj.__mro__) > 1:
@@ -109,7 +109,7 @@ def freeze_class(
 
 @freeze_dispatch.register(staticmethod)
 def _(
-    obj: staticmethod[Any],
+    obj: staticmethod[..., Any],
     config: Config,
     tabu: Dict[int, Tuple[int, int]],
     depth: int,
@@ -120,7 +120,7 @@ def _(
 
 @freeze_dispatch.register(classmethod)
 def _(
-    obj: classmethod[Any],
+    obj: classmethod[Any, ..., Any],
     config: Config,
     tabu: Dict[int, Tuple[int, int]],
     depth: int,

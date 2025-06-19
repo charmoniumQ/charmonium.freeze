@@ -87,7 +87,7 @@ def _(
     _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     if config.use_hash:
-        return config.hasher(obj), False, None
+        return config.hasher(bytes(obj)), False, None
     return bytes(obj), False, None
 
 
@@ -179,13 +179,17 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
+    value = (
+        getattr(obj, "__name__"),
+        getattr(obj, "__version__")
+    )
     if config.ignore_extensions and not hasattr(obj, "__file__"):
-        return config.hasher(obj.__name__.encode()), True, None
-    if hasattr(obj, "__file__") and any(
+        return freeze_sequence(value, True, True, config, tabu, depth)
+    elif hasattr(obj, "__file__") and any(
         ancestor in config.ignore_files
         for ancestor in pathlib.Path(obj.__file__ or "/").resolve().parents
     ):
-        return config.hasher(obj.__name__.encode()), True, None
+        return freeze_sequence(value, True, True, config, tabu, depth)
     attrs = {
         attr_name: getattr(obj, attr_name, None)
         for index, attr_name in enumerate(dir(obj))
