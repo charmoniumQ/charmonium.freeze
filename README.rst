@@ -130,7 +130,11 @@ of the function.
 >>> i = 456
 >>> func = lambda x: x + i + 123
 >>> pprint(freeze(func))
-(('<lambda>', None, 123, b'|\x00t\x00\x17\x00d\x01\x17\x00S\x00'),
+(('<lambda>',
+  None,
+  123,
+  b'\x97\x00|\x00t\x00\x00\x00\x00\x00\x00\x00\x00\x00z\x00\x00\x00d\x01'
+  b'z\x00\x00\x00S\x00'),
  (('i', 456),))
 
 As promised, the frozen value includes the bytecode (``b'|x00t...``), the
@@ -140,7 +144,11 @@ computationally equivalent to what it was before.
 
 >>> i = 789
 >>> pprint(freeze(func))
-(('<lambda>', None, 123, b'|\x00t\x00\x17\x00d\x01\x17\x00S\x00'),
+(('<lambda>',
+  None,
+  123,
+  b'\x97\x00|\x00t\x00\x00\x00\x00\x00\x00\x00\x00\x00z\x00\x00\x00d\x01'
+  b'z\x00\x00\x00S\x00'),
  (('i', 789),))
 
 ``freeze`` works for objects that use function as data.
@@ -168,7 +176,9 @@ computationally equivalent to what it was before.
 (('greet',
   None,
   ' ',
-  b't\x00|\x00j\x01d\x01\x17\x00|\x01\x17\x00\x83\x01\x01\x00d\x00S\x00'),)
+  b'\x97\x00t\x01\x00\x00\x00\x00\x00\x00\x00\x00|\x00j\x02\x00\x00\x00\x00'
+  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00d\x01z\x00\x00\x00'
+  b'|\x01z\x00\x00\x00\xab\x01\x00\x00\x00\x00\x00\x00\x01\x00y\x00'),)
 
 ----------------
 Freezing Objects
@@ -425,7 +435,7 @@ I do this to find the differences between subsequent runs:
     $ python code.py
     $ mv freeze.log freeze.1.log
 
-    $ sed -i 's/at 0x[0-9a-f]*//g' freeze.*.log
+    $ sed -i -e 's/at 0x[0-9a-f]*/ptr/g' -e 's/memo hit for [0-9]*/memo hit/g' -e 's/tabu hit for [0-9]*/tabu hit/g' freeze.*.log
     # This removes pointer values that appear in the `repr(...)`.
 
     $ meld freeze.0.log freeze.1.log
@@ -477,8 +487,10 @@ TODO
   - ☐ Document configuration options.
   - ☑ Document ``summarize_diff`` and ``iterate_diffs``.
   - ☑ Config object should cascade with ``with config.set(a=b)``
-  - ☐ Make it possible to ignore classes and functions by their package, rather than just module.
   - ☐ Use the class name when deciding whether to ignore a method (currently we just use the methods __module__ and __name__).
+  - ☐ Support ~__getfrozenstate_for_type__~
+  - ☐ Have a helper that can annotate methods, classes, and functions with ~__getfrozenstate__~.
+  - ☐ Make it possible to ignore classes and functions by their package, rather than just module.
   - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
 
 - ☑ Make ``freeze`` handle more types:
@@ -500,3 +512,6 @@ TODO
     - If function contains no locals or globals except other immutables, it is immutable.
     - If a collection is immutable and contains only immutables, it is immutable.
   - ☑ Make performance benchmarks.
+  - ☐ Consider making a fast-path for dataclasses.
+  - ☐ Consider a config option that states "all classes/functions from X.Y are stateless."
+      - For example, most of the standard library is stateless (e.g., ``re``)

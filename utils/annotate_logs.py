@@ -56,7 +56,7 @@ test_result = [1, 3, 2, 1, 1, 1]
 assert get_line_lengths(test) == test_result, get_line_lengths(test)
 
 if __name__ == "__main__":
-    """
+    r"""
     # Run tests
     pytest --numprocesses=0 --exitfirst --failed-first tests > log
 
