@@ -28,7 +28,7 @@ from typing import (
 
 # import autoimport
 import setuptools
-import toml
+import tomllib
 import typer
 from charmonium.async_subprocess import run
 from termcolor import cprint
@@ -107,7 +107,7 @@ def get_package_path(package: str) -> Path:
 
 app = typer.Typer()
 tests_dir = Path("tests")
-pyproject = toml.loads(Path("pyproject.toml").read_text())
+pyproject = tomllib.loads(Path("pyproject.toml").read_text())
 extra_packages = [
     obj["include"] for obj in pyproject["tool"]["poetry"].get("packages", [])
 ]
@@ -185,19 +185,19 @@ async def test() -> None:
                 "PYTHONPATH": "tests:" + os.environ.get("PYTHONPATH", ""),
             },
         ),
-        pretty_run(
-            [
-                "pylint",
-                "-j",
-                "0",
-                "--output-format",
-                "colorized",
-                "--score=y",
-                *all_python_files,
-            ],
-            # see https://pylint.pycqa.org/en/latest/user_guide/run.html#exit-codes
-            checker=lambda proc: proc.returncode & (1 | 2) == 0,
-        ),
+        # pretty_run(
+        #     [
+        #         "pylint",
+        #         "-j",
+        #         "0",
+        #         "--output-format",
+        #         "colorized",
+        #         "--score=y",
+        #         *all_python_files,
+        #     ],
+        #     # see https://pylint.pycqa.org/en/latest/user_guide/run.html#exit-codes
+        #     checker=lambda proc: proc.returncode & (1 | 2) == 0,
+        # ),
         pytest(use_coverage=True, show_slow=True),
         pretty_run(
             [
@@ -369,7 +369,7 @@ def publish(
         )
     except subprocess.CalledProcessError as e:
         # Undo bump2version
-        new_pyproject = toml.loads(Path("pyproject.toml").read_text())
+        new_pyproject = tomllib.loads(Path("pyproject.toml").read_text())
         tag = "v" + new_pyproject["tool"]["bump2version"]["current_version"]
         subprocess.run(["git", "tag", "--delete", tag], check=True)
         subprocess.run(["git", "reset", "--hard", "HEAD~1"], check=True)

@@ -12,15 +12,17 @@
         name-pure-shell = "${name}-pure-shell";
         name-shell = "${name}-shell";
         name-test = "${name}-test";
-        default-python = pkgs.python310;
+        default-python = pkgs.python313;
         nix-dev-dependencies = [
           # Alternative Pythons for Tox
-          pkgs.pypy3
-          pkgs.python38
           pkgs.python39
           pkgs.python310
+          pkgs.python311
+          pkgs.python312
+          pkgs.python313
           pkgs.poetry
-          
+          pkgs.libffi.dev
+          pkgs.zlib.dev
         ];
       in {
         packages.${name} = pkgs.poetry2nix.mkPoetryApplication {
