@@ -6,7 +6,7 @@ from typing import Any, Dict, Hashable, Optional, Tuple
 
 from . import util
 from .config import Config
-from .lib import freeze_attrs, freeze_dispatch, freeze_sequence, logger
+from .lib import freeze_attrs, freeze_dispatch, freeze_sequence
 
 
 @freeze_dispatch.register
@@ -17,34 +17,33 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    type_pair = (obj.__module__, obj.__name__)
-    if type_pair in config.ignore_functions:
-        logger.debug("%s ignoring %s", " " * depth, type_pair)
-        return freeze_sequence(type_pair, True, True, config, tabu, depth)
-    closure = util.get_closure_attrs(obj)
+    module = obj.__module__
     attrs: Dict[str, Any] = {}
     attrs["code"] = obj.__code__
-    myglobals = {
-        ".".join((var_name, *attr_path)): val
-        for var_name, attr_path, _, val in closure.myglobals
-        if (obj.__module__, var_name) not in config.ignore_globals
-        and (not attr_path or (var_name, attr_path[0]) not in config.ignore_globals)
-    }
-    if myglobals:
-        attrs["globals"] = myglobals
-    nonlocals = {
-        ".".join((var_name, *attr_path)): val
-        for var_name, attr_path, _, val in closure.nonlocals
-        if (
-            (obj.__module__, var_name) not in config.ignore_nonlocals
-            and (
-                not attr_path
-                or (obj.__module__, attr_path[0]) not in config.ignore_nonlocals
+    attrs["consts"] = obj.__code__.co_consts
+    attrs["names"] = obj.__code__.co_names
+    if (config.assume_purity and module in config.override_impure_modules) or (config.assume_impurity and module not in config.override_pure_modules):
+        closure = util.get_closure_attrs(obj)
+        myglobals = {
+            ".".join((var_name, *attr_path)): val
+            for var_name, attr_path, _, val in closure.myglobals
+            if (obj.__module__, var_name) not in config.ignore_globals
+            and (not attr_path or (var_name, attr_path[0]) not in config.ignore_globals)
+        }
+        if myglobals:
+            attrs["globals"] = myglobals
+        nonlocals = {
+            ".".join((var_name, *attr_path)): val
+            for var_name, attr_path, _, val in closure.nonlocals
+            if ((obj.__module__, var_name) not in config.ignore_nonlocals
+                and (
+                    not attr_path
+                    or (obj.__module__, attr_path[0]) not in config.ignore_nonlocals
+                )
             )
-        )
-    }
-    if nonlocals:
-        attrs["nonlocals"] = nonlocals
+        }
+        if nonlocals:
+            attrs["nonlocals"] = nonlocals
     return freeze_attrs(attrs, True, False, config, tabu, depth)
 
 

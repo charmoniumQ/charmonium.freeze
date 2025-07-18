@@ -177,16 +177,6 @@ class CustomFreezableType:
         return "hello"
 
 
-def ignored_function() -> str:
-    # This should be ignored, so unfreezable_obj should never be hit.
-    return str(unfreezable_obj)
-
-
-global_config.ignore_functions.add(
-    (ignored_function.__module__, ignored_function.__name__)
-)
-
-
 # pylint: disable=consider-using-with
 non_equivalents: Mapping[str, Any] = {
     "ellipses": [...],
@@ -202,7 +192,7 @@ non_equivalents: Mapping[str, Any] = {
     "memoryview": [memoryview(b"abc"), memoryview(b"def")],
     # TODO: add freeze to functools.singledispatch
     "functools.singledispatch": [single_dispatch_test, get_generator],
-    "function": [cast, tqdm, *dir(tempfile), ignored_function],
+    "function": [cast, tqdm, *dir(tempfile)],
     "unbound methods": [ClassWithStaticMethod.foo, ClassWithStaticMethod.baz],
     "bound methods": [ClassWithStaticMethod.bar, ClassWithStaticMethod().baz],
     "lambda": [lambda: 1, lambda: 2, lambda: global0, lambda: global1],

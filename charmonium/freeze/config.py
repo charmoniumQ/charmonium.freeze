@@ -108,6 +108,26 @@ class Config:
         default_factory=lambda: {*sys.stdlib_module_names, *sys.builtin_module_names},
     )
 
+    assume_purity: bool = True
+
+    @property
+    def assume_impurity(self) -> bool:
+        return not self.assume_purity
+
+    override_impure_modules: Set[str] = field(
+        default_factory=lambda: {
+            "random",
+        },
+    )
+
+    override_pure_modules: Set[str] = field(
+        default_factory=lambda: {
+            "re",
+            "urllib.parse",
+            "charmonium.freeze",
+        },
+    )
+
     # Whether to assume that all code is constant
     ignore_all_code: bool = False
 
@@ -197,16 +217,6 @@ class Config:
             ("typing", "Generic"),
         }
     )
-
-    # Put ``(function.__module__, function.__name__)`` of functions whose source
-    # code and class attributes never change or those changes are not relevant
-    # to the resulting computation.
-    ignore_functions: Set[Tuple[str, str]] = field(default_factory=lambda: {
-        ("re", "_compile"),
-        ("re", "escape"),
-        ("urllib.parse", "quote_from_bytes"),
-        ("charmonium.freeze.lib", "freeze"),
-    })
 
     ignore_dict_order: bool = False
 
