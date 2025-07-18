@@ -471,7 +471,8 @@ TODO
   - ☑ Test hash for objects and classes more carefully.
   - ☑ Improve test coverage.
   - ☑ Investigate when modules are assumed constant.
-  - ☐ Detect if a module/package has a version. If present, use that. Else, use each attribute.
+  - ☐ For code and modules, determine if the module is a ~distribution package~. If so, use ``importlib.metadata.version``. Otherwise, module goes by attributes and code goes by bytecode.
+  - ☐ Test that we are actually interpreting accesses to ``x.y`` as ``x.y`` and not ``x`` (overly conservative).
   - ☐ Support closures which include ``import x`` and ``from x import y``
 
 - ☑ API
@@ -483,7 +484,8 @@ TODO
   - ☑ Make freeze object-oriented with a module-level instance, like ``random.random`` and ``random.Random``.
     - This makes it easier for different callers to have their own configuration options.
   - ☑ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what ``charmonium.determ_hash`` does. Use this configuration in ``charmonium.cache``.
-  - ☐ Move "get call graph" into its own package.
+  - ☐ Option to assume impure (explicitly mark as pure) or assume pure (explicitly mark as impure).
+  - ☐ Make it easier to turn on logging and performance logging.
   - ☐ Document configuration options.
   - ☑ Document ``summarize_diff`` and ``iterate_diffs``.
   - ☑ Config object should cascade with ``with config.set(a=b)``
@@ -491,7 +493,6 @@ TODO
   - ☐ Support ~__getfrozenstate_for_type__~
   - ☐ Have a helper that can annotate methods, classes, and functions with ~__getfrozenstate__~.
   - ☐ Make it possible to ignore classes and functions by their package, rather than just module.
-  - ☐ Have an API for ignoring modules in ``requirements.txt`` or ``pyproject.toml``, and just tracking them by version.
 
 - ☑ Make ``freeze`` handle more types:
 

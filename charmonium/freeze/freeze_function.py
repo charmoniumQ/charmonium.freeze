@@ -56,16 +56,6 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    return freeze_code(obj, config, tabu, depth, index)
-
-
-def freeze_code(
-    obj: types.CodeType,
-    config: Config,
-    tabu: Dict[int, Tuple[int, int]],
-    depth: int,
-    _index: int,
-) -> Tuple[Hashable, bool, Optional[int]]:
     source_loc = Path(obj.co_filename)
     if config.ignore_all_code or any(
         util.is_relative_to(source_loc, constant_file)

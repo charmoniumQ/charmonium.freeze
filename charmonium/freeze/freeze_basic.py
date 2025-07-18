@@ -4,13 +4,15 @@ import io
 import logging
 import pathlib
 import re
+import ssl
+import sys
 import struct
 import types
 from typing import Any, Dict, Hashable, Optional, Tuple
 
 from .config import Config
 from .lib import freeze_attrs, freeze_dispatch, freeze_sequence
-from .util import int_to_bytes
+from .util import int_to_bytes, get_version
 
 
 @freeze_dispatch.register(type(None))
@@ -179,25 +181,34 @@ def _(
     depth: int,
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
-    value = (
-        getattr(obj, "__name__", ""),
-        getattr(obj, "__version__", "")
-    )
-    if config.ignore_extensions and not hasattr(obj, "__file__"):
-        return freeze_sequence(value, True, True, config, tabu, depth)
-    elif hasattr(obj, "__file__") and any(
+    name = obj.__name__
+    version = get_version(name)
+    file = pathlib.Path(getattr(obj, "__file__", None) or "/").resolve()
+    if name in config.stdlib_modules:
+        return freeze_sequence((name, *sys.version_info), True, True, config, tabu, depth)
+    elif version and config.use_version and name not in config.use_version_exceptions:
+        return freeze_sequence((name, version), True, True, config, tabu, depth)
+    elif any(
         ancestor in config.ignore_files
-        for ancestor in pathlib.Path(obj.__file__ or "/").resolve().parents
+        for ancestor in file.parents
     ):
-        return freeze_sequence(value, True, True, config, tabu, depth)
-    attrs = {
-        attr_name: getattr(obj, attr_name, None)
-        for index, attr_name in enumerate(dir(obj))
-        if hasattr(obj, attr_name)
-        and attr_name not in config.ignore_module_attrs
-        and (obj.__name__, attr_name) not in config.ignore_globals
-    }
-    return freeze_attrs(attrs, True, True, config, tabu, depth)
+        return freeze_sequence(
+            (file, config.hasher(file.read_bytes())),
+            True,
+            True,
+            config,
+            tabu,
+            depth
+        )
+    else:
+        attrs = {
+            attr_name: getattr(obj, attr_name, None)
+            for attr_name in dir(obj)
+            if hasattr(obj, attr_name)
+            and attr_name not in config.ignore_module_attrs
+            and (name, attr_name) not in config.ignore_globals
+        }
+        return freeze_attrs(attrs, True, True, config, tabu, depth)
 
 
 # pylint: disable=unused-argument
@@ -275,3 +286,16 @@ def _(
     if config.use_hash:
         return config.hasher(obj.getvalue().encode()), False, None
     return obj.getvalue(), False, None
+
+
+@freeze_dispatch.register
+def _(
+    obj: ssl.SSLContext,
+    config: Config,
+    tabu: Dict[int, Tuple[int, int]],
+    depth: int,
+    index: int,
+) -> Tuple[Hashable, bool, Optional[int]]:
+    if config.use_hash:
+        return config.hasher(b"ssl.SSLContext"), False, None
+    return "ssl.SSLContext", False, None

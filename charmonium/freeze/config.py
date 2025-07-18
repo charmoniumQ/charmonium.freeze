@@ -1,6 +1,7 @@
 import contextlib
 import hashlib
 import pathlib
+import sys
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, Generator, Hashable, Optional, Set, Tuple
 
@@ -70,6 +71,17 @@ class Config:
         }
     )
 
+    # Use the version instead of attributes (slow), when module's version
+    # metadata is available.
+    use_version: bool = True
+
+    # If use_version is True, these are the exceptions.
+    #
+    # This would be useful if you have a versioned, but in-development modoule,
+    # whose version does not completely specify the contents. Put that module's
+    # name here to guarantee soundness.
+    use_version_exceptions: Set[str] = field(default_factory=set)
+
     # Put ``(function.__module__, function.__name__, nonlocal_name)`` of
     # nonlocal variables which never change or whose changes do not affect the
     # result computation here, (e.g. caches). This will not attempt to freeze
@@ -89,11 +101,11 @@ class Config:
     # Put paths to source code that whose source code never changes or those
     # changes do not affect the result computation. I will still recurse into
     # the closure of these functions, just not its source code though.
-    ignore_files: Set[pathlib.Path] = field(
-        default_factory=lambda: {
-            # add the stdlib
-            pathlib.Path(pathlib.__file__).parent,
-        }
+    ignore_files: Set[pathlib.Path] = field(default_factory=set)
+
+    # These modules are versioned by the Python version
+    stdlib_modules: Set[str] = field(
+        default_factory=lambda: {*sys.stdlib_module_names, *sys.builtin_module_names},
     )
 
     # Whether to assume that all code is constant
@@ -195,10 +207,6 @@ class Config:
         ("urllib.parse", "quote_from_bytes"),
         ("charmonium.freeze.lib", "freeze"),
     })
-
-    # Whether to ignore modules that are a C extension.
-    # These are modules that have no __file__ attribute.
-    ignore_extensions: bool = True
 
     ignore_dict_order: bool = False
 

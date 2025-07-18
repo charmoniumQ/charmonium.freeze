@@ -28,7 +28,7 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 
 [tool.pytest.ini_options]
-addopts = "--quiet --numprocesses=0 --doctest-glob='*.rst' --doctest-modules --benchmark-disable --durations=20"
+addopts = "--quiet --numprocesses=0 --doctest-modules --benchmark-disable --durations=20"
 # pytest --benchmark-enable --benchmark-storage=build/benchmark --benchmark-only --numprocesses 0
 
 [tool.coverage.run]

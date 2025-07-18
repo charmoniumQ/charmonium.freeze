@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import builtins
 import dis
+import importlib
 import inspect
 import pathlib
 import types
@@ -72,19 +73,20 @@ def get_closure_attrs(func: types.FunctionType) -> ClosureAttrs:
             if is_nonlocal:
                 nonlocals.append(VarAttr(var_name, attr_path, True, val))
 
-    def uniquify(var_attrs: list[VarAttr]) -> list[VarAttr]:
-        ret_var_attrs = []
-        chosen_attrs: set[tuple[str, ...]] = set()
-        for var_attr in sorted(var_attrs, key=lambda x: (x.name, x.attr_path)):
-            if not any(
-                (var_attr.name, *var_attr.attr_path[:i]) in chosen_attrs
-                for i in range(len(var_attr.attr_path) + 1)
-            ):
-                chosen_attrs.add((var_attr.name, *var_attr.attr_path))
-                ret_var_attrs.append(var_attr)
-        return ret_var_attrs
-
     return ClosureAttrs(uniquify(parameters), uniquify(nonlocals), uniquify(myglobals))
+
+
+def uniquify(var_attrs: list[VarAttr]) -> list[VarAttr]:
+    ret_var_attrs = []
+    chosen_attrs: set[tuple[str, ...]] = set()
+    for var_attr in sorted(var_attrs, key=lambda x: (x.name, x.attr_path)):
+        if not any(
+            (var_attr.name, *var_attr.attr_path[:i]) in chosen_attrs
+            for i in range(len(var_attr.attr_path) + 1)
+        ):
+            chosen_attrs.add((var_attr.name, *var_attr.attr_path))
+            ret_var_attrs.append(var_attr)
+    return ret_var_attrs
 
 
 def has_callable(
@@ -186,3 +188,14 @@ def int_to_bytes(obj: int) -> bytes:
         byteorder="big",
         signed=True,
     )
+
+
+def get_version(name: str) -> str | None:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        package = importlib.import_module("requests.api").__package__
+        if package and package != name:
+            return get_version(package)
+        else:
+            return None
