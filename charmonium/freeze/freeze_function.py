@@ -88,21 +88,13 @@ def freeze_frame(
     index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     return freeze_sequence(
-        (obj.f_code, obj.f_locals, obj.f_lasti),
+        (obj.f_code, dict(**obj.f_locals), obj.f_lasti),
         is_immutable=True,
         order_matters=True,
         config=config,
         tabu=tabu,
         depth=depth,
     )
-    # return freeze_sequence(
-    #     (obj.f_code, obj.f_locals, obj.f_lasti),
-    #     is_immutable=True,
-    #     order_matters=True,
-    #     config=config,
-    #     tabu=tabu,
-    #     depth=depth,
-    # )
 
 
 @freeze_dispatch.register

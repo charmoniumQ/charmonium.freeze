@@ -98,4 +98,4 @@ def _(
         return pickle_data
 
     # Otherwise, give up.
-    raise UnfreezableTypeError("not implemented")
+    raise UnfreezableTypeError(f"not implemented for {type(obj)} {obj}")

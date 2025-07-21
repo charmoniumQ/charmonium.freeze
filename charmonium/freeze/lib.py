@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 import logging
+import os
 import re
+import pathlib
 import textwrap
 import types
-from typing import Any, Collection, Dict, Hashable, List, Mapping, Optional, Tuple, cast
+from typing import Any, Collection, Dict, Hashable, Iterator, List, Mapping, Optional, Tuple, cast
 
 from .config import Config, global_config
 from .util import circular_bit_shift, int_to_bytes, min_with_none_inf
 
+
 logger = logging.getLogger("charmonium.freeze")
+logger.setLevel(logging.DEBUG)
+# logger.propagate = False
 
 
 class FreezeError(Exception):
@@ -23,6 +29,17 @@ class UnfreezableTypeError(FreezeError, NotImplementedError):
 
 class FreezeRecursionError(FreezeError):
     pass
+
+
+@contextlib.contextmanager
+def enable_logging(file: pathlib.Path) -> Iterator[None]:
+    fh = logging.FileHandler(file)
+    fh.setFormatter(logging.Formatter("%(message)s"))
+    fh.setLevel(logging.DEBUG)
+    logger.addHandler(fh)
+    logger.debug("PID %d", os.getpid())
+    yield
+    logger.removeHandler(fh)
 
 
 def freeze(obj: Any, config: Optional[Config] = None) -> Hashable:
@@ -173,7 +190,7 @@ def freeze_dispatch(
     _index: int,
 ) -> Tuple[Hashable, bool, Optional[int]]:
     raise UnfreezableTypeError(
-        f"charmonium.freeze is not implemented for {type(obj).__name__}."
+        f"charmonium.freeze is not implemented for {type(obj).__name__}. "
         "See <https://github.com/charmoniumQ/charmonium.time_block/blob/master/README.rst> for how to add a new type."
     )
 
