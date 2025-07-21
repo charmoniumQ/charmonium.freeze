@@ -484,9 +484,9 @@ TODO
   - ☑ Make freeze object-oriented with a module-level instance, like ``random.random`` and ``random.Random``.
     - This makes it easier for different callers to have their own configuration options.
   - ☑ Add an option which returns a single 128-bit int instead of a structured object after a certain depth. This is what ``charmonium.determ_hash`` does. Use this configuration in ``charmonium.cache``.
-  - ☐ Option to assume impure (explicitly mark as pure) or assume pure (explicitly mark as impure).
+  - ☑ Option to assume impure (explicitly mark as pure) or assume pure (explicitly mark as impure).
   - ☐ Make it easier to turn on logging and performance logging.
-  - ☐ Document configuration options.
+  - ☑ Document configuration options.
   - ☑ Document ``summarize_diff`` and ``iterate_diffs``.
   - ☑ Config object should cascade with ``with config.set(a=b)``
   - ☐ Use the class name when deciding whether to ignore a method (currently we just use the methods __module__ and __name__).

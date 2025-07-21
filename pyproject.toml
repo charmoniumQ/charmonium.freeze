@@ -1,28 +1,35 @@
-[tool.poetry]
+[project]
 name = "charmonium.freeze"
 version = "0.8.5"
 description = "Injectively, deterministically maps arbitrary objects to hashable values"
-authors = ["Samuel Grayson <sam+dev@samgrayson.me>"]
-license = "MIT"
 readme = "README.rst"
-repository = "https://github.com/charmoniumQ/charmonium.freeze"
-
-
-packages = [
-	{ include = "charmonium" },
-]
-
-keywords = ["freeze", "hash"]
+license = "MIT"
+keywords = ["hash"]
 classifiers = [
 	"Operating System :: OS Independent",
 	"Typing :: Typed",
 	"Natural Language :: English",
-	"Development Status :: 4 - Beta","Intended Audience :: Developers","Topic :: Software Development :: Libraries :: Python Modules",
+	"Development Status :: 4 - Beta",
+	"Intended Audience :: Developers",
+	"Topic :: Software Development :: Libraries :: Python Modules",
 ]
+requires-python = ">=3.9"
+dependencies = []
+
+[[project.authors]]
+name = "Samuel Grayson"
+email = "sam+dev@samgrayson.me"
+
+[project.urls]
+# https://packaging.python.org/en/latest/specifications/well-known-project-urls/#well-known-labels
+source = "https://github.com/charmoniumQ/charmonium.freeze"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["charmonium"]
 
 [tool.isort]
 profile = "black"
@@ -82,44 +89,24 @@ commands =
     {toxinidir}/script.py per-env-tests
 """
 
-
-[tool.poetry.group.dev.dependencies]
-toml = "^0.10.2"
-setuptools = "^80.9.0"
-autoimport = "^0.7.5"
-isort = "^5.10.0"
-black = "^22.3"
-mypy = "^1.15.0"
-pytest = "^7.2"
-pytest-xdist = "^3.2"
-pytest-cov = "^4.0"
-coverage = "^6.1.2"
-tox = "^4.0"
-radon = "^5.1.0"
-twine = "^3.5.0"
-proselint = "^0.13.0"
-rstcheck = "^3.3.1"
-bump2version = "^1.0.1"
-"charmonium.async-subprocess" = "^0.1.7"
-typer = "^0.4.0"
-termcolor = "^1.1.0"
-typing-extensions = "^4.1.1"
-ipython = "^8.10"
-ipdb = "^0.13.9"
-types-setuptools = "^57.4.10"
-types-toml = "^0.10.4"
-types-termcolor = "^1.1.3"
-# rest
-matplotlib = "^3.5.1"
-pandas = "^1.4.1"
-numpy = "^1.22.3"
-icecream = "^2.1.2"
-autoflake = "^1.7.7"
-ruff = "^0.0.253"
-pylint = "^2.16.2"
-pytest-benchmark = "^4.0.0"
-
-[tool.poetry.dependencies]
-python = "^3.9"
-# make sure to keep the Python versions here consistent with those tested by Tox (tool.tox.legacy_tox_ini.tox.envlist).
-
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "coverage>=7.9.2",
+    "ipython>=8.18.1",
+    "isort>=6.0.1",
+    "matplotlib>=3.9.4",
+    "mypy>=1.17.0",
+    "numpy>=2.0.2",
+    "pandas>=2.3.1",
+    "pytest>=8.4.1",
+    "pytest-benchmark>=5.1.0",
+    "pytest-cov>=6.2.1",
+    "pytest-xdist>=3.8.0",
+    "radon>=6.0.1",
+    "requests>=2.32.4",
+    "rstcheck>=6.2.5",
+    "ruff>=0.12.4",
+    "tox>=4.27.0",
+    "tqdm>=4.67.1",
+]
