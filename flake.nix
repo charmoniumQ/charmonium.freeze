@@ -30,17 +30,17 @@ inputs = {
       let
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python313;
-        other-pythons = [
-          pkgs.python310
-          pkgs.python311
-          pkgs.python312
-          pkgs.python313
-        ];
+        other-pythons = {
+          py310 = pkgs.python310;
+          py311 = pkgs.python311;
+          py312 = pkgs.python312;
+          py313 = pkgs.python313;
+        };
         workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
         overlay = workspace.mkPyprojectOverlay {
           sourcePreference = "wheel";
         };
-        pythonSets = (pkgs.callPackage pyproject-nix.build.packages {
+        pythonSets = python: (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
         }).overrideScope
           (
@@ -75,9 +75,8 @@ inputs = {
           };
           default = impure;
         };
-        packages = rec {
-          charmonium-freeze = pythonSets.mkVirtualEnv "charmonium.freeze" workspace.deps.default;
-          default = charmonium-freeze;
-        };
+        packages = builtins.mapAttrs (
+          py-name: python-pkg: (pythonSets python-pkg).mkVirtualEnv "charmonium.freeze-${py-name}" workspace.deps.default)
+          other-pythons;
       });
 }
