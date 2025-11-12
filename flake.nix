@@ -38,21 +38,17 @@ inputs = {
         ];
         workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
         overlay = workspace.mkPyprojectOverlay {
-          # Sdists are less likely to "just work" because of the metadata missing from uv.lock.
-          # Binary wheels are more likely to, but may still require overrides for library dependencies.
-          sourcePreference = "wheel"; # "sdist"
+          sourcePreference = "wheel";
         };
-        pythonSet =
-          # Use base package set from pyproject.nix builders
-          (pkgs.callPackage pyproject-nix.build.packages {
-            inherit python;
-          }).overrideScope
-            (
-              pkgs.lib.composeManyExtensions [
-                pyproject-build-systems.overlays.default
-                overlay
-              ]
-            );
+        pythonSets = (pkgs.callPackage pyproject-nix.build.packages {
+          inherit python;
+        }).overrideScope
+          (
+            pkgs.lib.composeManyExtensions [
+              pyproject-build-systems.overlays.wheel
+              overlay
+            ]
+          );
       in rec {
         devShells = rec {
           impure = pkgs.mkShell {
@@ -78,6 +74,10 @@ inputs = {
             '';
           };
           default = impure;
+        };
+        packages = rec {
+          charmonium-freeze = pythonSets.mkVirtualEnv "charmonium.freeze" workspace.deps.default;
+          default = charmonium-freeze;
         };
       });
 }

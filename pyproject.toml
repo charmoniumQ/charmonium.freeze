@@ -1,6 +1,6 @@
 [project]
 name = "charmonium.freeze"
-version = "0.8.5"
+version = "0.8.6"
 description = "Injectively, deterministically maps arbitrary objects to hashable values"
 readme = "README.rst"
 license = "MIT"
