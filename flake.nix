@@ -26,7 +26,17 @@ inputs = {
   };
 
   outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, pyproject-build-systems }:
-    flake-utils.lib.eachDefaultSystem (system:
+    let
+      project = pyproject-nix.lib.project.loadPyproject {
+        # Read & unmarshal pyproject.toml relative to this project root.
+        # projectRoot is also used to set `src` for renderers such as buildPythonPackage.
+        projectRoot = ./.;
+      };
+      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+      overlay = workspace.mkPyprojectOverlay {
+        sourcePreference = "wheel";
+      };
+    in flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python313;
@@ -35,10 +45,6 @@ inputs = {
           py311 = pkgs.python311;
           py312 = pkgs.python312;
           py313 = pkgs.python313;
-        };
-        workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
-        overlay = workspace.mkPyprojectOverlay {
-          sourcePreference = "wheel";
         };
         pythonSets = python: (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
@@ -76,7 +82,12 @@ inputs = {
           default = impure;
         };
         packages = builtins.mapAttrs (
-          py-name: python-pkg: (pythonSets python-pkg).mkVirtualEnv "charmonium.freeze-${py-name}" workspace.deps.default)
+          py-name:
+          python:
+          python.pkgs.buildPythonPackage (pyproject-nix.lib.renderers.buildPythonPackage {
+            inherit project python;
+          })
+        )
           other-pythons;
       });
 }
