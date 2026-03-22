@@ -45,6 +45,7 @@ inputs = {
           py311 = pkgs.python311;
           py312 = pkgs.python312;
           py313 = pkgs.python313;
+          py314 = pkgs.python314;
         };
         pythonSets = python: (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
